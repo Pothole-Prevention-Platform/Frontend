@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 import {
-  Bell,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -33,7 +32,6 @@ import type {
   AdminStatusIconType,
 } from '../types'
 import { cn } from '../utils/cn'
-import { Link } from 'react-router-dom'
 
 type RepairTargetType = 'district' | 'report'
 
@@ -189,39 +187,6 @@ function panelClass(className?: string) {
   return cn(
     'rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,40,70,0.06)]',
     className,
-  )
-}
-
-function AdminAvatar() {
-  return (
-    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full bg-[#EAF2FF] shadow-sm ring-1 ring-slate-200" aria-hidden="true">
-      <span className="absolute left-1/2 top-[8px] h-[22px] w-[24px] -translate-x-1/2 rounded-full bg-slate-900" />
-      <span className="absolute left-1/2 top-[13px] h-[20px] w-[18px] -translate-x-1/2 rounded-full bg-[#F2B38D]" />
-      <span className="absolute left-1/2 top-[8px] h-[13px] w-[27px] -translate-x-1/2 rounded-b-[12px] rounded-t-full bg-slate-950" />
-      <span className="absolute left-1/2 top-[27px] h-[26px] w-[32px] -translate-x-1/2 rounded-t-[14px] bg-[#123E7A]" />
-      <span className="absolute left-[17px] top-[21px] h-[2px] w-[2px] rounded-full bg-slate-900" />
-      <span className="absolute right-[17px] top-[21px] h-[2px] w-[2px] rounded-full bg-slate-900" />
-    </div>
-  )
-}
-
-function HeaderUser() {
-  return (
-    <div className="hidden shrink-0 items-center gap-5 md:flex">
-      <button type="button" aria-label="알림 12건" className="relative flex h-10 w-10 items-center justify-center rounded-full text-slate-900 transition hover:bg-blue-50">
-        <Bell size={24} aria-hidden="true" />
-        <span className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">
-          12
-        </span>
-      </button>
-      <Link to="/mypage" aria-label="마이페이지로 이동" className="flex items-center gap-3 rounded-full px-2 py-1 transition hover:bg-blue-50">
-        <AdminAvatar />
-        <span className="flex items-center gap-2 text-[14px] font-black text-slate-800">
-          홍길동
-          <ChevronDown size={18} aria-hidden="true" />
-        </span>
-      </Link>
-    </div>
   )
 }
 
@@ -908,14 +873,13 @@ export function AdminDashboardPage() {
 
   return (
     <div className="space-y-4">
-      <header className="flex items-start justify-between gap-4">
+      <header className="pr-0 lg:pr-56">
         <div>
           <h1 className="text-[30px] font-black text-slate-950 sm:text-[34px]">관리자 대시보드</h1>
           <p className="mt-2 text-[15px] font-semibold text-slate-500">
             서울특별시 도로 위험 현황과 처리 성과를 한눈에 확인하세요.
           </p>
         </div>
-        <HeaderUser />
       </header>
 
       <FilterBar
