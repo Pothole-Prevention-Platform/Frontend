@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   ChevronRight,
   CloudUpload,
-  Cpu,
   FileText,
   Image as ImageIcon,
   Info,
@@ -549,6 +548,68 @@ function ReportForm({
   )
 }
 
+function AiVerificationIllustration() {
+  const sparkles = [
+    { id: 'left', className: 'left-[18px] top-[62px] h-6 w-6 text-blue-300/80' },
+    { id: 'right', className: 'right-[15px] top-[82px] h-5 w-5 text-blue-300/80' },
+    { id: 'top', className: 'right-[52px] top-[18px] h-3 w-3 text-blue-300/70' },
+  ] as const
+
+  return (
+    <div
+      role="img"
+      aria-label="AI 이미지 자동 분석을 나타내는 파란 반도체 칩 아이콘"
+      className="relative mx-auto h-[136px] w-[176px]"
+    >
+      <div className="absolute left-1/2 top-[54%] h-[86px] w-[132px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-blue-200/90" />
+      <div className="absolute left-1/2 top-[54%] h-[112px] w-[156px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-blue-100/90" />
+
+      <span className="absolute left-[8px] top-[42px] h-3 w-3 rounded-full bg-blue-300/70" />
+      <span className="absolute left-[20px] top-[34px] h-1.5 w-1.5 rounded-full bg-blue-200" />
+      <span className="absolute right-[8px] top-[72px] h-3 w-3 rounded-full bg-blue-300/70" />
+      <span className="absolute right-[26px] top-[26px] h-1.5 w-1.5 rounded-full bg-blue-300" />
+
+      <span className="absolute left-[26px] top-[58px] h-[2px] w-[33px] rounded-full bg-blue-300/70" />
+      <span className="absolute left-[36px] top-[78px] h-[2px] w-[26px] rounded-full bg-blue-200/90" />
+      <span className="absolute right-[28px] top-[48px] h-[2px] w-[30px] rounded-full bg-blue-300/70" />
+      <span className="absolute right-[36px] top-[88px] h-[2px] w-[24px] rounded-full bg-blue-200/90" />
+
+      {sparkles.map((sparkle) => (
+        <span key={sparkle.id} className={cn('absolute', sparkle.className)} aria-hidden="true">
+          <span className="absolute left-1/2 top-0 h-full w-[2px] -translate-x-1/2 rounded-full bg-current" />
+          <span className="absolute left-0 top-1/2 h-[2px] w-full -translate-y-1/2 rounded-full bg-current" />
+        </span>
+      ))}
+
+      <div className="absolute left-1/2 top-[58px] h-[70px] w-[70px] -translate-x-1/2 rounded-[18px] bg-gradient-to-br from-[#1F8FFF] to-[#075ED5] shadow-[0_18px_36px_rgba(0,96,210,0.26),inset_0_1px_0_rgba(255,255,255,0.35)]">
+        <div className="absolute -left-3 top-[15px] space-y-2">
+          {[0, 1, 2, 3].map((pin) => (
+            <span key={`left-${pin}`} className="block h-1.5 w-3 rounded-l-full bg-blue-300/90" />
+          ))}
+        </div>
+        <div className="absolute -right-3 top-[15px] space-y-2">
+          {[0, 1, 2, 3].map((pin) => (
+            <span key={`right-${pin}`} className="block h-1.5 w-3 rounded-r-full bg-blue-300/90" />
+          ))}
+        </div>
+        <div className="absolute -top-3 left-[15px] flex gap-2">
+          {[0, 1, 2, 3].map((pin) => (
+            <span key={`top-${pin}`} className="h-3 w-1.5 rounded-t-full bg-blue-300/90" />
+          ))}
+        </div>
+        <div className="absolute -bottom-3 left-[15px] flex gap-2">
+          {[0, 1, 2, 3].map((pin) => (
+            <span key={`bottom-${pin}`} className="h-3 w-1.5 rounded-b-full bg-blue-300/90" />
+          ))}
+        </div>
+        <span className="absolute inset-0 flex items-center justify-center text-[28px] font-black tracking-normal text-white">
+          AI
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function AiGuideCard() {
   return (
     <section className="rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50 to-white p-5 shadow-[0_16px_40px_rgba(0,96,210,0.06)] sm:p-6">
@@ -558,10 +619,7 @@ function AiGuideCard() {
       </div>
 
       <div className="mt-8 flex justify-center">
-        <div className="relative flex h-[116px] w-[116px] items-center justify-center rounded-[30px] bg-blue-100 text-blue-700 shadow-[0_20px_45px_rgba(0,96,210,0.12)]">
-          <Cpu size={62} strokeWidth={1.7} aria-hidden="true" />
-          <span className="absolute text-[32px] font-black">AI</span>
-        </div>
+        <AiVerificationIllustration />
       </div>
 
       <p className="mt-7 text-center text-[14px] font-bold leading-relaxed text-slate-700">
