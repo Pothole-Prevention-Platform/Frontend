@@ -47,15 +47,15 @@ export function LoadingPage() {
         src="/assets/loading/loading-map-left.webp"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-0 h-full w-[52%] object-cover object-left opacity-70"
+        className="pointer-events-none absolute inset-y-0 left-0 h-full w-[52%] object-cover object-left opacity-90 contrast-125"
       />
       <img
         src="/assets/loading/loading-map-right.webp"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 right-0 h-full w-[52%] object-cover object-right opacity-70"
+        className="pointer-events-none absolute inset-y-0 right-0 h-full w-[52%] object-cover object-right opacity-90 contrast-125"
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.94)_0%,rgba(255,255,255,0.82)_36%,rgba(255,255,255,0.72)_62%,rgba(255,255,255,0.95)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.94)_0%,rgba(255,255,255,0.84)_36%,rgba(255,255,255,0.58)_62%,rgba(255,255,255,0.72)_100%)]" />
 
       <section className="relative z-10 flex w-full max-w-[760px] flex-col items-center text-center">
         <img
