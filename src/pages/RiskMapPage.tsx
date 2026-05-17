@@ -8,7 +8,6 @@ import {
   Construction,
   Cpu,
   Droplets,
-  FilePlus2,
   Gauge,
   Layers,
   RefreshCcw,
@@ -273,6 +272,19 @@ function RiskMapImagePanel() {
   )
 }
 
+function ReportFilePlusIcon() {
+  return (
+    <svg width="46" height="46" viewBox="0 0 46 46" fill="none" aria-hidden="true">
+      <path d="M12 6h15.6L35 13.4V36a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4Z" fill="currentColor" />
+      <path d="M27.5 6v7.2a2.1 2.1 0 0 0 2.1 2.1H35" fill="#DBEAFE" />
+      <path d="M17.5 20h10M17.5 25h9" stroke="white" strokeWidth="2.6" strokeLinecap="round" opacity="0.92" />
+      <circle cx="34" cy="34" r="8.2" fill="white" />
+      <circle cx="34" cy="34" r="6.7" fill="currentColor" />
+      <path d="M34 30.2v7.6M30.2 34h7.6" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function StatSummaryCard({
   title,
   caption,
@@ -312,7 +324,7 @@ function StatSummaryCard({
   }[color]
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,40,70,0.06)]">
+    <section className="h-full min-h-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,40,70,0.06)]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-[17px] font-black tracking-[-0.05em] text-[#07182F]">
@@ -326,17 +338,17 @@ function StatSummaryCard({
         </button>
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-4">
+      <div className="mt-4 flex items-center justify-between gap-4">
         <div>
           <div className="flex items-end gap-2">
-            <span className={cn('text-[42px] font-black leading-none tracking-[-0.04em]', colorStyle.value)}>{value}</span>
+            <span className={cn('text-[40px] font-black leading-none tracking-[-0.04em]', colorStyle.value)}>{value}</span>
             {unit && <span className="mb-1 text-[17px] font-black tracking-[-0.04em] text-slate-800">{unit}</span>}
           </div>
-          <p className="mt-3 text-[13px] font-bold text-slate-500">
+          <p className="mt-2 text-[13px] font-bold text-slate-500">
             전일 대비 <span className={colorStyle.change}>{change}</span>
           </p>
         </div>
-        <div className={cn('flex h-[70px] w-[70px] shrink-0 items-center justify-center rounded-2xl', colorStyle.bg, colorStyle.icon)}>
+        <div className={cn('flex h-[62px] w-[62px] shrink-0 items-center justify-center rounded-2xl', colorStyle.bg, colorStyle.icon)}>
           {icon}
         </div>
       </div>
@@ -346,9 +358,9 @@ function StatSummaryCard({
 
 function RiskLegendCard() {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_12px_32px_rgba(15,40,70,0.06)]">
+    <section className="min-h-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,40,70,0.06)]">
       <h2 className="text-[17px] font-black tracking-[-0.05em] text-[#07182F]">위험 등급 범례</h2>
-      <div className="mt-4 grid grid-cols-4 gap-3">
+      <div className="mt-3 grid grid-cols-4 gap-2">
         {riskLegend.map((item) => (
           <div key={item.id} className="text-center">
             <span className={cn('mx-auto block h-3 w-3 rounded-full', legendDotClasses[item.color])} />
@@ -357,7 +369,7 @@ function RiskLegendCard() {
           </div>
         ))}
       </div>
-      <p className="mt-4 text-[12px] font-semibold leading-relaxed tracking-[-0.04em] text-slate-500">
+      <p className="mt-2 text-[11px] font-semibold leading-relaxed tracking-[-0.04em] text-slate-500">
         위험도는 AI 모델의 예측된 포트홀 발생 확률입니다.
       </p>
     </section>
@@ -366,7 +378,7 @@ function RiskLegendCard() {
 
 function RiskSummaryPanel() {
   return (
-    <aside className="grid gap-3 sm:grid-cols-2 xl:block xl:space-y-3">
+    <aside className="grid gap-3 sm:grid-cols-2 xl:h-[560px] xl:grid-cols-1 xl:grid-rows-[132px_132px_132px_minmax(0,1fr)]">
       <StatSummaryCard
         title="오늘의 고위험 구간"
         value={String(riskMapStats.highRiskCount)}
@@ -382,7 +394,7 @@ function RiskSummaryPanel() {
         unit="건"
         change={`▲ ${riskMapStats.reportDeltaPercent}%`}
         color="blue"
-        icon={<FilePlus2 size={44} aria-hidden="true" />}
+        icon={<ReportFilePlusIcon />}
       />
       <StatSummaryCard
         title="AI 예측 정확도"
