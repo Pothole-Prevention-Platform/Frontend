@@ -281,7 +281,7 @@ function UserTypeCard({ option, selected, onSelect }: { option: UserTypeOption; 
       aria-pressed={selected}
       onClick={onSelect}
       className={cn(
-        'relative grid min-h-[96px] w-full max-w-full min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-xl border bg-white px-3 text-left transition focus-visible:outline-blue-400 sm:grid-cols-[84px_minmax(0,1fr)] sm:gap-3 sm:px-6',
+        'relative grid min-h-[96px] w-full max-w-full min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-2 overflow-hidden whitespace-normal rounded-xl border bg-white px-3 text-left transition focus-visible:outline-blue-400 sm:grid-cols-[84px_minmax(0,1fr)] sm:gap-3 sm:px-6',
         selected
           ? 'border-blue-600 bg-blue-50/20 shadow-[0_10px_24px_rgba(0,96,210,0.1)]'
           : 'border-slate-200 hover:border-blue-200 hover:bg-blue-50/30',
@@ -305,9 +305,9 @@ function UserTypeCard({ option, selected, onSelect }: { option: UserTypeOption; 
           </span>
         }
       />
-      <span className="min-w-0">
+      <span className="min-w-0 whitespace-normal">
         <span className="block text-[15px] font-black text-[#07182F]">{option.title}</span>
-        <span className="mt-2 block break-words text-[12px] font-semibold leading-snug text-slate-500 [overflow-wrap:anywhere]">
+        <span className="mt-2 block whitespace-normal break-words text-[12px] font-semibold leading-snug text-slate-500 [overflow-wrap:anywhere]">
           {option.description}
         </span>
       </span>
@@ -397,7 +397,7 @@ export function InitialSetupPage() {
           <div className="absolute right-9 top-6">
             <TopUserBar />
           </div>
-          <div className="mx-auto w-full min-w-0 max-w-[1440px]">
+          <div className="mx-auto w-[calc(100vw-2rem)] min-w-0 max-w-[1440px] sm:w-full">
             <div className="pr-0 md:pr-44">
               <h1 className="text-[30px] font-black text-[#07182F] sm:text-[32px]">초기 설정</h1>
               <p className="mt-2 text-[14px] font-semibold text-slate-500">서비스를 맞춤 설정하고 더 안전한 도로 환경을 만들어보세요.</p>
