@@ -99,7 +99,7 @@ function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavIt
         cn(
           'group flex items-center rounded-xl font-extrabold transition focus-visible:outline-blue-400',
           mobile
-            ? 'min-w-0 flex-col justify-center gap-1 px-1 py-2 text-[11px]'
+            ? 'h-[54px] min-w-0 max-w-full flex-col justify-center gap-1 overflow-hidden px-0.5 py-1.5 text-[10px]'
             : compact
               ? 'shrink-0 gap-2 px-3 py-2 text-[13px]'
               : 'gap-3 px-3 py-3 text-[14px]',
@@ -116,7 +116,7 @@ function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavIt
             className={cn('shrink-0', isActive ? 'text-white' : 'text-slate-500 group-hover:text-blue-700')}
             aria-hidden="true"
           />
-          <span className={cn('min-w-0 break-keep leading-tight', !compact && !mobile && 'whitespace-nowrap', mobile && 'text-center')}>{item.label}</span>
+          <span className={cn('min-w-0 break-keep leading-tight', !compact && !mobile && 'whitespace-nowrap', mobile && 'w-full text-center')}>{item.label}</span>
         </>
       )}
     </NavLink>
@@ -262,7 +262,7 @@ function MobileHeader() {
 
 function MobileBottomNav() {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white px-2 py-2 shadow-[0_-10px_28px_rgba(15,40,70,0.08)] lg:hidden" aria-label="하단 주요 메뉴">
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-[repeat(5,minmax(0,1fr))] gap-1 border-t border-slate-200 bg-white px-1 py-2 shadow-[0_-10px_28px_rgba(15,40,70,0.08)] lg:hidden" aria-label="하단 주요 메뉴">
       {bottomNavItems.map((item, index) => (
         <SidebarNavItem key={`${item.to}-${index}-mobile`} item={item} mobile />
       ))}
