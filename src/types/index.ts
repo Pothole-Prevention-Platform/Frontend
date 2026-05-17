@@ -46,6 +46,12 @@ export type AiRecommendedActionType = 'confirm' | 'retake' | 'suspect'
 
 export type AiRecommendedActionVariant = 'primary' | 'secondary' | 'warning'
 
+export type AlertRiskLevel = 'danger' | 'caution' | 'attention' | 'safe'
+
+export type AlertToggleType = 'push' | 'voice' | 'rain'
+
+export type AlertSettingDay = '매일' | '평일' | '주말'
+
 export interface RiskMapStats {
   highRiskCount: number
   recentReportCount: number
@@ -277,6 +283,51 @@ export interface WeatherAlert {
   rainfallAmount: number
   riskMessage: string
   issuedAt: string
+}
+
+export interface CurrentDangerAlert {
+  id: string
+  title: string
+  riskLevel: AlertRiskLevel
+  location: string
+  direction: string
+  distanceMeters: number
+  badgeLabel: string
+}
+
+export interface RoutePreview {
+  estimatedArrival: string
+  remainingDistance: string
+  routeMapImageUrl: string
+}
+
+export interface AlertToggleSetting {
+  id: string
+  title: string
+  description: string
+  status: '활성' | '비활성'
+  enabled: boolean
+  type: AlertToggleType
+}
+
+export interface RecentDangerAlert {
+  id: string
+  time: string
+  relativeTime: string
+  riskLevel: AlertRiskLevel
+  riskLabel: string
+  title: string
+  detail: string
+  distanceText: string
+  statusText?: string
+}
+
+export interface AlertSettings {
+  quietHoursEnabled: boolean
+  quietStartTime: string
+  quietEndTime: string
+  selectedDays: AlertSettingDay
+  alertRadiusMeters: number
 }
 
 export interface AdminReportRow {

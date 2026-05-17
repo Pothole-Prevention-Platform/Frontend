@@ -26,10 +26,9 @@ type AgreementItem = {
   description: string
 }
 
-type AssetState = 'webp' | 'png' | 'hidden'
+type AssetState = 'png' | 'hidden'
 
 const securityImagePaths: Record<Exclude<AssetState, 'hidden'>, string> = {
-  webp: '/assets/auth/signup-security.webp',
   png: '/assets/auth/signup-security.png',
 }
 
@@ -81,7 +80,7 @@ function BrandLogo() {
         <img
           src="/assets/loading/pothole-guard-logo-cropped.png"
           alt="포트홀 가드 AI"
-          className="h-[58px] w-auto max-w-[230px] object-contain sm:h-[68px] sm:max-w-[270px] lg:h-[76px] lg:max-w-[310px]"
+          className="h-[62px] w-auto max-w-[240px] object-contain sm:h-[70px] sm:max-w-[280px] lg:h-[76px] lg:max-w-[310px]"
           onError={() => setShowImage(false)}
         />
       ) : (
@@ -119,46 +118,19 @@ function MinistryLogo() {
 
 function SignupHeader() {
   return (
-    <header className="flex min-h-[96px] items-center justify-between px-5 py-4 sm:px-8 lg:px-9">
+    <header className="flex min-h-[104px] shrink-0 items-center justify-between px-5 py-4 sm:px-8 lg:px-11">
       <BrandLogo />
-
-      <div className="hidden items-center gap-5 sm:flex">
-        <button
-          type="button"
-          aria-label="알림 보기"
-          className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#07182F] transition hover:bg-blue-50"
-        >
-          <Bell size={25} strokeWidth={2.1} aria-hidden="true" />
-          <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">
-            12
-          </span>
-        </button>
-
-        <div className="flex items-center gap-3">
-          <div className="h-11 w-11 overflow-hidden rounded-full bg-gradient-to-br from-slate-200 to-blue-100 shadow-sm" aria-hidden="true">
-            <div className="mx-auto mt-2 h-5 w-5 rounded-full bg-[#F2C2A2]" />
-            <div className="mx-auto mt-1 h-8 w-7 rounded-t-full bg-[#10233F]" />
-          </div>
-          <button
-            type="button"
-            className="flex items-center gap-2 text-sm font-black text-slate-800 transition hover:text-blue-700"
-          >
-            홍길동
-            <ChevronDown size={17} strokeWidth={2.2} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
     </header>
   )
 }
 
 function BenefitCard() {
   return (
-    <div className="w-full max-w-[calc(100vw-40px)] min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,40,70,0.05)]">
-      <div className="space-y-6">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-[14px] border border-slate-200 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,40,70,0.05)] sm:p-6">
+      <div className="space-y-4">
         {benefitItems.map((item) => (
           <div key={item.title} className="grid min-w-0 grid-cols-[58px_minmax(0,1fr)] gap-4">
-            <div className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700 shadow-sm">
+            <div className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-[12px] border border-blue-100 bg-blue-50 text-blue-700 shadow-sm">
               {item.icon}
             </div>
             <div className="min-w-0 flex-1 pt-1">
@@ -173,7 +145,7 @@ function BenefitCard() {
 }
 
 function SecurityImage() {
-  const [imageState, setImageState] = useState<AssetState>('webp')
+  const [imageState, setImageState] = useState<AssetState>('png')
 
   if (imageState === 'hidden') {
     return (
@@ -188,26 +160,26 @@ function SecurityImage() {
       src={securityImagePaths[imageState]}
       alt="안전한 개인정보 보호를 나타내는 방패 일러스트"
       className="h-[78px] w-[86px] shrink-0 object-contain"
-      onError={() => setImageState(imageState === 'webp' ? 'png' : 'hidden')}
+      onError={() => setImageState('hidden')}
     />
   )
 }
 
 function SignupIntroPanel() {
   return (
-    <aside className="mx-auto flex w-full min-w-0 max-w-[420px] flex-col justify-center py-6 lg:min-h-[720px] lg:py-10">
+    <aside className="mx-auto flex w-[calc(100vw-40px)] min-w-0 max-w-[430px] flex-col pt-6 pb-4 sm:w-full lg:mx-0 lg:max-w-[460px] lg:pt-[34px] lg:pb-0">
       <div className="text-center">
-        <h1 className="text-[34px] font-black text-[#07182F] sm:text-[38px]">회원가입</h1>
+        <h1 className="text-[34px] font-black text-[#07182F] sm:text-[40px]">회원가입</h1>
         <p className="mt-4 break-all text-sm font-bold text-slate-500 sm:break-words sm:text-base">
           포트홀 가드 AI와 함께 더 안전한 사회를 만들어가요.
         </p>
       </div>
 
-      <div className="mt-9">
+      <div className="mt-8">
         <BenefitCard />
       </div>
 
-      <div className="mt-8 grid w-full max-w-[calc(100vw-40px)] min-w-0 grid-cols-[86px_minmax(0,1fr)] items-center gap-4 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/75 p-5 shadow-[0_18px_45px_rgba(0,96,210,0.06)] sm:gap-5">
+      <div className="mt-8 grid w-full max-w-full min-w-0 grid-cols-[86px_minmax(0,1fr)] items-center gap-4 overflow-hidden rounded-[14px] border border-blue-100 bg-blue-50/75 p-5 shadow-[0_18px_45px_rgba(0,96,210,0.06)] sm:gap-5">
         <SecurityImage />
         <p className="min-w-0 flex-1 break-all text-[17px] font-black leading-relaxed text-blue-700 sm:break-words">
           AI가 도로를 지키고
@@ -248,7 +220,7 @@ function TextInput({
 }: TextInputProps) {
   return (
     <div className="grid gap-2 md:grid-cols-[120px_1fr] md:items-start md:gap-4">
-      <label htmlFor={id} className="pt-0 text-sm font-black text-[#07182F] md:pt-3">
+      <label htmlFor={id} className="pt-0 text-sm font-black text-[#07182F] md:pt-2.5">
         {label}
       </label>
       <div>
@@ -259,11 +231,11 @@ function TextInput({
             type={type}
             autoComplete={autoComplete}
             placeholder={placeholder}
-            className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 pr-11 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            className="h-10 w-full rounded-md border border-slate-200 bg-white px-4 pr-11 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           />
           {rightIcon && <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600">{rightIcon}</div>}
         </div>
-        {helper && <p className="mt-2 text-xs font-semibold text-slate-500">{helper}</p>}
+        {helper && <p className="mt-1.5 text-xs font-semibold text-slate-500">{helper}</p>}
       </div>
     </div>
   )
@@ -309,7 +281,7 @@ function PasswordInput({
 function PhoneInput() {
   return (
     <div className="grid gap-2 md:grid-cols-[120px_1fr] md:items-start md:gap-4">
-      <label htmlFor="phone" className="pt-0 text-sm font-black text-[#07182F] md:pt-3">
+      <label htmlFor="phone" className="pt-0 text-sm font-black text-[#07182F] md:pt-2.5">
         휴대폰 번호
       </label>
       <div className="grid gap-3 sm:grid-cols-[96px_1fr]">
@@ -320,7 +292,7 @@ function PhoneInput() {
           id="countryCode"
           name="countryCode"
           defaultValue="+82"
-          className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+          className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
         >
           <option>+82</option>
           <option>+1</option>
@@ -332,7 +304,7 @@ function PhoneInput() {
           type="tel"
           autoComplete="tel"
           placeholder="휴대폰 번호를 입력하세요 (예: 010-1234-5678)"
-          className="h-11 rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+          className="h-10 rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
         />
       </div>
     </div>
@@ -344,7 +316,7 @@ function UserTypeSelect() {
 
   return (
     <div className="grid gap-2 md:grid-cols-[120px_1fr] md:items-start md:gap-4">
-      <label htmlFor="userType" className="pt-0 text-sm font-black text-[#07182F] md:pt-3">
+      <label htmlFor="userType" className="pt-0 text-sm font-black text-[#07182F] md:pt-2.5">
         사용자 유형
       </label>
       <select
@@ -352,7 +324,7 @@ function UserTypeSelect() {
         name="userType"
         value={userType}
         onChange={(event) => setUserType(event.target.value)}
-        className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        className="h-10 w-full rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
       >
         <option value="" disabled>
           사용자 유형을 선택하세요
@@ -370,14 +342,14 @@ function AgreementRow({ item }: { item: AgreementItem }) {
   const [checked, setChecked] = useState(false)
 
   return (
-    <div className="grid grid-cols-[28px_1fr] gap-3 rounded-xl border border-transparent p-2 transition hover:border-blue-100 hover:bg-blue-50/40 sm:grid-cols-[28px_32px_1fr_auto] sm:items-center">
+    <div className="grid grid-cols-[28px_1fr] gap-3 rounded-lg border border-transparent px-0 py-2 transition hover:border-blue-100 hover:bg-blue-50/40 sm:grid-cols-[28px_32px_minmax(0,1fr)_104px] sm:items-center sm:px-1">
       <input
         id={item.id}
         name={item.id}
         type="checkbox"
         checked={checked}
         onChange={(event) => setChecked(event.target.checked)}
-        className="h-[22px] w-[22px] rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+        className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
       />
       <div className="hidden items-center text-blue-700 sm:flex">{item.icon}</div>
       <label htmlFor={item.id} className="cursor-pointer">
@@ -388,7 +360,7 @@ function AgreementRow({ item }: { item: AgreementItem }) {
       </label>
       <button
         type="button"
-        className="col-start-2 h-9 rounded-md border border-slate-200 bg-white px-4 text-[13px] font-black text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:col-start-auto"
+        className="col-start-2 h-9 rounded-md border border-slate-200 bg-white px-3 text-[13px] font-black text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 sm:col-start-auto"
       >
         자세히 보기
       </button>
@@ -405,14 +377,14 @@ function SignupFormCard() {
   }
 
   return (
-    <section className="w-full max-w-[calc(100vw-40px)] rounded-2xl border border-slate-200 bg-white/95 px-5 py-7 shadow-[0_22px_65px_rgba(15,40,70,0.12)] sm:max-w-none sm:px-8 lg:max-w-[870px]">
+    <section className="w-full max-w-full rounded-[16px] border border-slate-200 bg-white/95 px-5 py-7 shadow-[0_22px_65px_rgba(15,40,70,0.12)] sm:max-w-none sm:px-8 lg:max-w-[1160px] lg:px-10 lg:py-8">
       <div>
         <h2 className="text-2xl font-black text-[#07182F]">회원 정보 입력</h2>
         <p className="mt-3 text-sm font-semibold text-slate-500">정확한 정보 입력은 안전한 서비스 이용을 위해 중요합니다.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-7">
-        <div className="space-y-4">
+      <form onSubmit={handleSubmit} className="mt-6">
+        <div className="space-y-3">
           <TextInput id="name" label="이름" placeholder="이름을 입력하세요" autoComplete="name" />
           <TextInput id="email" label="이메일" placeholder="이메일 주소를 입력하세요" type="email" autoComplete="email" />
           <PasswordInput
@@ -432,8 +404,8 @@ function SignupFormCard() {
           <UserTypeSelect />
         </div>
 
-        <div className="mt-8">
-          <div className="mb-5 flex items-center gap-4">
+        <div className="mt-7">
+          <div className="mb-4 flex items-center gap-4">
             <span className="text-sm font-bold text-slate-600">선택 사항</span>
             <div className="h-px flex-1 bg-slate-200" />
           </div>
@@ -447,12 +419,12 @@ function SignupFormCard() {
 
         <button
           type="submit"
-          className="mt-7 h-12 w-full rounded-md bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-base font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(0,95,220,0.3)]"
+          className="mt-6 h-12 w-full rounded-md bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-base font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_rgba(0,95,220,0.3)]"
         >
           가입하기
         </button>
 
-        <div className="mt-5 flex items-center justify-center gap-2 text-slate-500">
+        <div className="mt-4 flex items-center justify-center gap-2 text-slate-500">
           <ShieldCheck size={20} strokeWidth={2} className="text-blue-600" aria-hidden="true" />
           <p className="text-[13px] font-bold">안전한 개인정보 보호를 약속합니다.</p>
         </div>
@@ -463,7 +435,7 @@ function SignupFormCard() {
 
 function SignupFooter() {
   return (
-    <footer className="border-t border-slate-200 bg-white/95 px-5 py-6 sm:px-8 lg:px-10">
+    <footer className="shrink-0 border-t border-slate-200 bg-white/95 px-5 py-5 sm:px-8 lg:px-11">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
           <MinistryLogo />
@@ -502,12 +474,12 @@ function SignupFooter() {
 
 export function SignupPage() {
   return (
-    <main className="min-h-svh overflow-x-hidden bg-gradient-to-br from-white via-[#FAFCFF] to-[#F3F8FF] text-slate-900">
+    <main className="flex min-h-svh flex-col overflow-x-hidden bg-gradient-to-br from-white via-[#FAFCFF] to-[#F3F8FF] text-slate-900">
       <SignupHeader />
 
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 px-5 pb-10 sm:px-8 lg:min-h-[calc(100svh-176px)] lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)] lg:px-9">
+      <div className="mx-auto grid w-full max-w-[1840px] flex-1 min-w-0 grid-cols-[minmax(0,1fr)] gap-8 px-5 pt-4 pb-10 sm:px-8 lg:grid-cols-[minmax(390px,460px)_minmax(0,1fr)] lg:gap-[88px] lg:px-11 lg:pt-2 lg:pb-9 xl:gap-[96px]">
         <SignupIntroPanel />
-        <div className="flex min-w-0 items-center justify-center">
+        <div className="flex min-w-0 items-start justify-center lg:justify-start">
           <SignupFormCard />
         </div>
       </div>

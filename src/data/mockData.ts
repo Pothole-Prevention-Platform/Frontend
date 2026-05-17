@@ -1,5 +1,7 @@
 import type {
   AdminReportRow,
+  AlertSettings,
+  AlertToggleSetting,
   AiAnalysisStep,
   AiDetectedFeature,
   AiRecommendedAction,
@@ -11,6 +13,7 @@ import type {
   ClaimChecklistItem,
   ClaimDocumentPreview,
   CompensationStep,
+  CurrentDangerAlert,
   CitizenReport,
   CitizenReportMock,
   CompensationDraft,
@@ -18,11 +21,13 @@ import type {
   PotholeRiskZone,
   RecentAiResult,
   RecentCitizenReport,
+  RecentDangerAlert,
   RiskMapFilter,
   RiskMapHighZone,
   RiskMapLegendItem,
   RiskMapStats,
   RiskSeverityOption,
+  RoutePreview,
   VehicleInfo,
   WeatherAlert,
 } from '../types'
@@ -736,3 +741,98 @@ export const riskLegend: RiskMapLegendItem[] = [
     color: 'red',
   },
 ]
+
+export const currentDangerAlert: CurrentDangerAlert = {
+  id: 'current-danger-gangnam-001',
+  title: '전방 50m 포트홀 위험 구간',
+  riskLevel: 'danger',
+  location: '강남구 테헤란로 123',
+  direction: '진행 방향 2차로',
+  distanceMeters: 50,
+  badgeLabel: '위험',
+}
+
+export const routePreview: RoutePreview = {
+  estimatedArrival: '14:24',
+  remainingDistance: '4.2 km',
+  routeMapImageUrl: '/assets/alerts/alert-route-map.webp',
+}
+
+export const alertToggleSettings: AlertToggleSetting[] = [
+  {
+    id: 'alert-toggle-push',
+    title: '푸시 알림',
+    description: '위험 구간 발생 시 푸시 알림을 받습니다.',
+    status: '활성',
+    enabled: true,
+    type: 'push',
+  },
+  {
+    id: 'alert-toggle-voice',
+    title: '음성 알림',
+    description: '운전 중 음성으로 위험 정보를 안내합니다.',
+    status: '활성',
+    enabled: true,
+    type: 'voice',
+  },
+  {
+    id: 'alert-toggle-rain',
+    title: '집중호우 시 자동 상향',
+    description: '집중호우 감지 시 알림 강도를 자동으로 상향합니다.',
+    status: '활성',
+    enabled: true,
+    type: 'rain',
+  },
+]
+
+export const recentDangerAlerts: RecentDangerAlert[] = [
+  {
+    id: 'recent-danger-001',
+    time: '14:21',
+    relativeTime: '방금 전',
+    riskLevel: 'danger',
+    riskLabel: '위험',
+    title: '전방 50m 포트홀 위험 구간',
+    detail: '강남구 테헤란로 123 | 진행 방향 2차로',
+    distanceText: '50m',
+  },
+  {
+    id: 'recent-danger-002',
+    time: '14:17',
+    relativeTime: '4분 전',
+    riskLevel: 'caution',
+    riskLabel: '주의',
+    title: '전방 120m 도로 균열 발생',
+    detail: '강남구 논현로 456 | 진행 방향 1차로',
+    distanceText: '120m',
+  },
+  {
+    id: 'recent-danger-003',
+    time: '14:12',
+    relativeTime: '9분 전',
+    riskLevel: 'attention',
+    riskLabel: '관심',
+    title: '전방 350m 도로 패임 구간',
+    detail: '강남구 도산대로 789 | 진행 방향 2차로',
+    distanceText: '350m',
+  },
+  {
+    id: 'recent-danger-004',
+    time: '14:05',
+    relativeTime: '16분 전',
+    riskLevel: 'safe',
+    riskLabel: '안전',
+    title: '구간 통과 완료',
+    detail: '역삼역 사거리 구간',
+    distanceText: '통과 완료',
+    statusText: '통과 완료',
+  },
+]
+
+export const alertSettings: AlertSettings = {
+  quietHoursEnabled: true,
+  quietStartTime: '22:00',
+  quietEndTime: '07:00',
+  selectedDays: '매일',
+  alertRadiusMeters: 500,
+}

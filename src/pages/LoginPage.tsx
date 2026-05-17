@@ -65,7 +65,7 @@ function HeroImageLayer() {
 
 function RiskCard() {
   return (
-    <div className="absolute bottom-[17%] left-[40%] z-20 hidden w-[214px] rounded-[14px] border border-white/80 bg-white/92 p-5 shadow-[0_22px_48px_rgba(21,76,140,0.18)] backdrop-blur-md sm:block xl:bottom-[18%] xl:left-[41%] xl:w-[220px]">
+    <div className="absolute bottom-[17%] left-[40%] z-20 hidden w-[214px] rounded-[14px] border border-white/80 bg-white/92 p-5 shadow-[0_22px_48px_rgba(21,76,140,0.18)] backdrop-blur-md lg:block xl:bottom-[18%] xl:left-[41%] xl:w-[220px]">
       <div className="absolute -bottom-6 left-10 h-0 w-0 border-x-[15px] border-t-[24px] border-x-transparent border-t-white/90" />
       <div className="flex items-center gap-2">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500 text-white">
@@ -92,20 +92,21 @@ function LoginHeroPanel() {
   return (
     <section className="relative isolate min-h-[560px] overflow-hidden bg-[#eef7ff] px-6 py-7 sm:min-h-[680px] sm:px-10 lg:min-h-svh lg:px-12 lg:py-11 xl:px-14">
       <HeroImageLayer />
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(238,247,255,0.72)_0%,rgba(238,247,255,0.32)_46%,rgba(238,247,255,0.02)_100%)]" />
-      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#eef7ff]/45 to-transparent" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(238,247,255,0.86)_0%,rgba(238,247,255,0.54)_46%,rgba(238,247,255,0.18)_100%)] lg:bg-[linear-gradient(90deg,rgba(238,247,255,0.58)_0%,rgba(238,247,255,0.24)_46%,rgba(238,247,255,0)_100%)]" />
+      <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#eef7ff]/70 to-transparent lg:from-[#eef7ff]/30" />
       <RiskCard />
 
       <div className="relative z-30 flex min-h-[506px] flex-col justify-between sm:min-h-[620px] lg:min-h-[calc(100svh-88px)]">
         <div>
           <BrandLogo />
           <div className="mt-10 max-w-[600px] sm:mt-14 lg:mt-[68px]">
-            <h2 className="text-[38px] font-black leading-tight text-[#07182F] sm:text-[48px] lg:text-[54px] xl:text-[56px]">
+            <h2 className="text-[34px] font-black leading-tight text-[#07182F] sm:text-[48px] lg:text-[50px] xl:text-[52px]">
               AI로 예측하고,
               <br />
-              함께 지키는 <span className="text-[#096BE8]">안전한 도로</span>
+              함께 지키는 <br className="sm:hidden" />
+              <span className="text-[#096BE8]">안전한 도로</span>
             </h2>
-            <p className="mt-6 max-w-[560px] text-[17px] font-semibold leading-[1.7] text-slate-600 sm:text-[19px]">
+            <p className="mt-5 max-w-[330px] break-keep text-[16px] font-semibold leading-[1.7] text-slate-600 sm:mt-6 sm:max-w-[560px] sm:text-[19px]">
               AI가 위험을 예측하고 시민과 함께 신속하게 대응하여 모두가 안심하고 이동할 수 있는 도로 환경을
               만듭니다.
             </p>
@@ -264,7 +265,7 @@ export function LoginPage() {
     <main className="min-h-svh overflow-x-hidden bg-white">
       <div className="grid min-h-svh grid-cols-1 lg:grid-cols-[minmax(0,1.04fr)_minmax(520px,0.96fr)]">
         <LoginHeroPanel />
-        <section className="flex min-h-svh items-center justify-center bg-white px-4 py-8 sm:px-8 lg:px-10 lg:py-8">
+        <section className="flex min-h-0 items-center justify-center bg-white px-4 py-8 sm:px-8 lg:min-h-svh lg:px-10 lg:py-8">
           <LoginCard />
         </section>
       </div>

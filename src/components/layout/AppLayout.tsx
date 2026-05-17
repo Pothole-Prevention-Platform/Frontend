@@ -58,9 +58,9 @@ function BrandLogo({ compact = false }: { compact?: boolean }) {
   return (
     <NavLink to="/risk-map" className="flex min-w-0 items-center gap-3" aria-label="포트홀 가드 AI 위험 예측지도로 이동">
       <AssetImage
-        sources={['/assets/loading/pothole-guard-logo.png']}
+        sources={['/assets/loading/pothole-guard-logo-cropped.png', '/assets/loading/pothole-guard-logo.png']}
         alt="포트홀 가드 AI"
-        className={cn('h-auto object-contain', compact ? 'w-[154px]' : 'w-[190px]')}
+        className={cn('h-auto object-contain', compact ? 'w-[160px]' : 'w-[208px]')}
         fallback={
           <div>
             <p className={cn('font-black tracking-[-0.04em] text-[#07182F]', compact ? 'text-[20px]' : 'text-[25px]')}>
@@ -147,9 +147,9 @@ function SidebarFooter() {
   return (
     <div className="rounded-2xl bg-white p-4 shadow-[0_16px_40px_rgba(15,40,70,0.05)]">
       <AssetImage
-        sources={['/assets/loading/molit-logo.png']}
+        sources={['/assets/loading/molit-logo-cropped.png', '/assets/loading/molit-logo.png']}
         alt="국토교통부"
-        className="h-auto w-[132px] object-contain"
+        className="h-auto w-[128px] object-contain"
         fallback={<span className="text-[17px] font-black tracking-[-0.04em] text-slate-700">국토교통부</span>}
       />
       <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-500">
@@ -219,8 +219,8 @@ export function AppLayout() {
     <div className="min-h-svh overflow-x-hidden bg-[#F8FBFF] text-slate-900">
       <DesktopSidebar />
       <MobileHeader />
-      <main className="min-w-0 px-4 py-5 pb-24 sm:px-6 lg:pb-8 xl:ml-[268px] xl:px-8 xl:py-7">
-        <div className="mx-auto w-full max-w-[1260px]">
+      <main className="min-w-0 px-4 py-5 pb-24 sm:px-6 lg:pb-8 xl:ml-[268px] xl:px-7 xl:py-6">
+        <div className="w-full max-w-[1210px]">
           <Outlet />
         </div>
       </main>
