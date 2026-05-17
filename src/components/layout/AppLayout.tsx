@@ -101,7 +101,7 @@ function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavIt
           mobile
             ? 'min-w-0 flex-col justify-center gap-1 px-1 py-2 text-[11px]'
             : compact
-              ? 'gap-2 px-3 py-2 text-[13px]'
+              ? 'shrink-0 gap-2 px-3 py-2 text-[13px]'
               : 'gap-3 px-3 py-3 text-[14px]',
           isActive
             ? 'bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-white shadow-[0_14px_28px_rgba(0,95,220,0.25)]'
@@ -251,7 +251,7 @@ function MobileHeader() {
           홍길동
         </Link>
       </div>
-      <nav className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8" aria-label="빠른 메뉴">
+      <nav className="-mx-4 mt-3 hidden gap-2 overflow-x-auto px-4 pb-1 md:flex" aria-label="빠른 메뉴">
         {navItems.map((item, index) => (
           <SidebarNavItem key={`${item.to}-${index}-compact`} item={item} compact />
         ))}

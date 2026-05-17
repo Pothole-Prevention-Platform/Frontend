@@ -93,18 +93,18 @@ function FilterBar() {
   }
 
   return (
-    <div className="mt-6 flex flex-wrap gap-3">
+    <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-6 sm:flex sm:flex-wrap">
       {riskMapFilters.map((filter) => (
         <button
           key={filter.id}
           type="button"
-          className="flex h-[64px] min-w-0 flex-1 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 text-left shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 sm:min-w-[180px] sm:flex-none sm:px-5"
+          className="flex h-[60px] min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 sm:h-[64px] sm:min-w-[180px] sm:flex-none sm:px-5"
           aria-label={`${filter.title} 필터, 현재 값 ${filterValues[filter.id]}`}
         >
-          <span className="flex min-w-0 items-center gap-4">
+          <span className="flex min-w-0 items-center gap-3 sm:gap-4">
             <span className="shrink-0 text-blue-700">{filterIcons[filter.id]}</span>
             <span className="min-w-0">
-              <span className="block truncate text-[14px] font-black tracking-[-0.04em] text-[#07182F]">{filter.title}</span>
+              <span className="block truncate text-[13px] font-black tracking-[-0.04em] text-[#07182F] sm:text-[14px]">{filter.title}</span>
               <span className="mt-1 block truncate text-[12px] font-semibold tracking-[-0.04em] text-slate-500">
                 {filterValues[filter.id]}
               </span>
@@ -117,9 +117,9 @@ function FilterBar() {
       <button
         type="button"
         onClick={resetFilters}
-        className="flex h-[64px] min-w-0 flex-1 items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 text-[14px] font-black tracking-[-0.04em] text-slate-700 shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 sm:min-w-[132px] sm:flex-none"
+        className="col-span-2 flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-black tracking-[-0.04em] text-slate-700 shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 sm:h-[64px] sm:min-w-[132px] sm:flex-none sm:text-[14px]"
       >
-        <RefreshCcw size={22} className="text-slate-600" aria-hidden="true" />
+        <RefreshCcw size={20} className="text-slate-600 sm:size-[22px]" aria-hidden="true" />
         필터 초기화
       </button>
     </div>
