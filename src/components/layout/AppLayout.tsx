@@ -114,7 +114,6 @@ function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavIt
           <Icon
             size={mobile ? 20 : compact ? 18 : 22}
             className={cn('shrink-0', isActive ? 'text-white' : 'text-slate-500 group-hover:text-blue-700')}
-            fill={item.to === '/risk-map' && isActive ? 'currentColor' : 'none'}
             aria-hidden="true"
           />
           <span className={cn('min-w-0 break-keep leading-tight', !compact && !mobile && 'whitespace-nowrap', mobile && 'text-center')}>{item.label}</span>
