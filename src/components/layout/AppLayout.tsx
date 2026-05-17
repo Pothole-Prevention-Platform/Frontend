@@ -1,12 +1,13 @@
 import { type ElementType, type ReactNode, useState } from 'react'
 import {
   Bell,
+  Building2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Landmark,
+  FilePenLine,
   MapPin,
-  PencilLine,
+  ScanSearch,
   Settings,
   ShieldCheck,
   UserRound,
@@ -29,9 +30,9 @@ type AssetImageProps = {
 
 const navItems: NavItem[] = [
   { to: '/risk-map', label: '위험 예측지도', icon: MapPin },
-  { to: '/report', label: '시민 신고', icon: PencilLine },
-  { to: '/report/ai-review', label: 'AI 판별', icon: ShieldCheck },
-  { to: '/agency', label: '관할기관 안내 · 보상 청구', icon: Landmark },
+  { to: '/report', label: '시민 신고', icon: FilePenLine },
+  { to: '/report/ai-review', label: 'AI 판별', icon: ScanSearch },
+  { to: '/agency', label: '관할기관 안내 · 보상 청구', icon: Building2 },
   { to: '/alerts', label: '실시간 알림', icon: Bell },
   { to: '/admin', label: '관리자 대시보드', icon: Settings },
   { to: '/mypage', label: '마이페이지', icon: UserRound },
@@ -39,8 +40,8 @@ const navItems: NavItem[] = [
 
 const bottomNavItems: NavItem[] = [
   { to: '/risk-map', label: '위험 예측지도', icon: MapPin },
-  { to: '/report', label: '시민 신고', icon: PencilLine },
-  { to: '/report/ai-review', label: 'AI 판별', icon: ShieldCheck },
+  { to: '/report', label: '시민 신고', icon: FilePenLine },
+  { to: '/report/ai-review', label: 'AI 판별', icon: ScanSearch },
   { to: '/alerts', label: '실시간 알림', icon: Bell },
   { to: '/mypage', label: '마이페이지', icon: UserRound },
 ]

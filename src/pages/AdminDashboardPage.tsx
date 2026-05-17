@@ -1,20 +1,15 @@
 import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 import {
-  AlertTriangle,
   Bell,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  ClipboardList,
-  Clock3,
-  Cpu,
+  ClipboardCheck,
   Download,
-  FilePlus2,
   FileText,
   RefreshCcw,
-  UserRound,
   Wrench,
   XCircle,
 } from 'lucide-react'
@@ -197,6 +192,19 @@ function panelClass(className?: string) {
   )
 }
 
+function AdminAvatar() {
+  return (
+    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full bg-[#EAF2FF] shadow-sm ring-1 ring-slate-200" aria-hidden="true">
+      <span className="absolute left-1/2 top-[8px] h-[22px] w-[24px] -translate-x-1/2 rounded-full bg-slate-900" />
+      <span className="absolute left-1/2 top-[13px] h-[20px] w-[18px] -translate-x-1/2 rounded-full bg-[#F2B38D]" />
+      <span className="absolute left-1/2 top-[8px] h-[13px] w-[27px] -translate-x-1/2 rounded-b-[12px] rounded-t-full bg-slate-950" />
+      <span className="absolute left-1/2 top-[27px] h-[26px] w-[32px] -translate-x-1/2 rounded-t-[14px] bg-[#123E7A]" />
+      <span className="absolute left-[17px] top-[21px] h-[2px] w-[2px] rounded-full bg-slate-900" />
+      <span className="absolute right-[17px] top-[21px] h-[2px] w-[2px] rounded-full bg-slate-900" />
+    </div>
+  )
+}
+
 function HeaderUser() {
   return (
     <div className="hidden shrink-0 items-center gap-5 md:flex">
@@ -207,9 +215,7 @@ function HeaderUser() {
         </span>
       </button>
       <Link to="/mypage" aria-label="마이페이지로 이동" className="flex items-center gap-3 rounded-full px-2 py-1 transition hover:bg-blue-50">
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-slate-200 text-slate-700 shadow-sm" aria-hidden="true">
-          <UserRound size={24} />
-        </div>
+        <AdminAvatar />
         <span className="flex items-center gap-2 text-[14px] font-black text-slate-800">
           홍길동
           <ChevronDown size={18} aria-hidden="true" />
@@ -299,22 +305,67 @@ function FilterBar({
   )
 }
 
+function KpiFilePlusIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <path d="M8 4h11l5 5v18.5A2.5 2.5 0 0 1 21.5 30h-11A2.5 2.5 0 0 1 8 27.5v-21A2.5 2.5 0 0 1 10.5 4Z" fill="currentColor" />
+      <path d="M19 4v5.5A1.5 1.5 0 0 0 20.5 11H24" fill="#DBEAFE" />
+      <path d="M12 15h8M12 19h7" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
+      <circle cx="24" cy="24" r="6" fill="white" />
+      <circle cx="24" cy="24" r="5" fill="currentColor" />
+      <path d="M24 21v6M21 24h6" stroke="white" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function KpiUrgentIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <path d="M16 5 27 24H5L16 5Z" fill="currentColor" />
+      <path d="M16 11v7" stroke="white" strokeWidth="2.4" strokeLinecap="round" />
+      <circle cx="16" cy="21.5" r="1.6" fill="white" />
+      <path d="M11 25.5h10M13 28h6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" opacity="0.65" />
+    </svg>
+  )
+}
+
+function KpiClockIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <circle cx="16" cy="16" r="12" fill="currentColor" />
+      <path d="M16 9.5V16l4.8 3" stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function KpiAiChipIcon() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <path d="M6 11H3M6 16H3M6 21H3M29 11h-3M29 16h-3M29 21h-3M11 6V3M16 6V3M21 6V3M11 29v-3M16 29v-3M21 29v-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.45" />
+      <rect x="7" y="7" width="18" height="18" rx="5" fill="currentColor" />
+      <rect x="10" y="10" width="12" height="12" rx="3" fill="white" opacity="0.14" />
+      <text x="16" y="19" textAnchor="middle" fontSize="8" fontWeight="900" fill="white">
+        AI
+      </text>
+    </svg>
+  )
+}
+
 function kpiIcon(iconType: AdminKpiIconType) {
-  const iconProps = { size: 32, 'aria-hidden': true }
 
   if (iconType === 'filePlus') {
-    return <FilePlus2 {...iconProps} />
+    return <KpiFilePlusIcon />
   }
 
   if (iconType === 'alertTriangle') {
-    return <AlertTriangle {...iconProps} fill="currentColor" />
+    return <KpiUrgentIcon />
   }
 
   if (iconType === 'clock') {
-    return <Clock3 {...iconProps} />
+    return <KpiClockIcon />
   }
 
-  return <Cpu {...iconProps} />
+  return <KpiAiChipIcon />
 }
 
 function KpiCard({ stat }: { stat: (typeof adminKpiStats)[number] }) {
@@ -788,7 +839,7 @@ function statusIcon(iconType: AdminStatusIconType) {
   }
 
   if (iconType === 'clipboard') {
-    return <ClipboardList {...props} />
+    return <ClipboardCheck {...props} />
   }
 
   if (iconType === 'wrench') {
