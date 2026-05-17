@@ -1,52 +1,717 @@
-import { Clock, MapPin, Sparkles } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { ReportUploadBox } from '../components/feature/ReportUploadBox'
-import { Button } from '../components/ui/Button'
-import { Card } from '../components/ui/Card'
-import { SectionHeader } from '../components/ui/SectionHeader'
+import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import {
+  Calendar,
+  CheckCircle2,
+  ChevronRight,
+  CloudUpload,
+  Cpu,
+  FileText,
+  Image as ImageIcon,
+  Info,
+  Lock,
+  MapPin,
+  Navigation,
+  RefreshCcw,
+  Search,
+  X,
+} from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  aiVerificationSteps,
+  citizenReportMock,
+  recentCitizenReports,
+  riskSeverityOptions,
+} from '../data/mockData'
+import type { RecentCitizenReport, ReportSeverityId, RiskSeverityOption } from '../types'
+import { cn } from '../utils/cn'
 
-export function CitizenReportPage() {
+type AssetImageProps = {
+  sources: string[]
+  alt: string
+  className: string
+  fallback: ReactNode
+}
+
+type SectionTitleProps = {
+  number: number
+  title: string
+  label?: '필수' | '선택'
+}
+
+const riskTypeOptions = [
+  '포트홀 (도로 파임)',
+  '균열 (도로 갈라짐)',
+  '도로 침하',
+  '낙하물',
+  '기타 도로 위험',
+] as const
+
+const severityColorClasses: Record<RiskSeverityOption['color'], { dot: string; text: string; ring: string }> = {
+  green: {
+    dot: 'bg-green-500',
+    text: 'text-green-700',
+    ring: 'ring-green-100',
+  },
+  yellow: {
+    dot: 'bg-yellow-400',
+    text: 'text-amber-600',
+    ring: 'ring-yellow-100',
+  },
+  orange: {
+    dot: 'bg-orange-500',
+    text: 'text-orange-600',
+    ring: 'ring-orange-100',
+  },
+  red: {
+    dot: 'bg-red-600',
+    text: 'text-red-600',
+    ring: 'ring-red-100',
+  },
+}
+
+const statusClasses: Record<RecentCitizenReport['statusColor'], string> = {
+  orange: 'bg-orange-100 text-orange-600',
+  blue: 'bg-blue-100 text-blue-700',
+  green: 'bg-green-100 text-green-700',
+  cyan: 'bg-cyan-100 text-cyan-700',
+}
+
+function formatFileSize(file: File) {
+  const sizeInMb = file.size / 1024 / 1024
+
+  if (sizeInMb >= 1) {
+    return `${sizeInMb.toFixed(1)}MB`
+  }
+
+  return `${Math.max(1, Math.round(file.size / 1024))}KB`
+}
+
+function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
+  const [sourceIndex, setSourceIndex] = useState(0)
+  const src = sources[sourceIndex]
+
+  if (!src) {
+    return <>{fallback}</>
+  }
+
   return (
-    <>
-      <SectionHeader title="시민 포트홀 신고" description="사진과 위치를 기반으로 신고를 작성하고 AI 판별 단계로 넘기는 데모 화면입니다." />
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <ReportUploadBox />
-        <div className="grid gap-4">
-          <Card>
-            <div className="flex gap-3">
-              <MapPin className="h-6 w-6 text-red-600" />
-              <div>
-                <p className="font-black text-slate-950">현재 위치 예시</p>
-                <p className="mt-1 text-sm text-slate-600">서울 서초구 서초동 1327-7</p>
-                <p className="text-sm font-bold text-slate-950">강남대로 327</p>
-              </div>
-            </div>
-          </Card>
-          <Card>
-            <div className="flex gap-3">
-              <Clock className="h-6 w-6 text-amber-600" />
-              <div>
-                <p className="font-black text-slate-950">현재 시간</p>
-                <p className="mt-1 text-sm text-slate-600">2026-05-17 09:42</p>
-              </div>
-            </div>
-          </Card>
-          <label className="block text-sm font-bold text-slate-700">
-            상세 설명
-            <textarea className="mt-2 min-h-32 w-full rounded-xl border border-slate-200 p-3" placeholder="차로 위치, 파손 크기, 위험 상황을 입력하세요." />
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setSourceIndex((current) => current + 1)}
+    />
+  )
+}
+
+function SectionTitle({ number, title, label }: SectionTitleProps) {
+  return (
+    <h3 className="text-[17px] font-black text-[#07182F]">
+      {number}. {title}{' '}
+      {label && (
+        <span className={cn('text-[13px] font-black', label === '필수' ? 'text-blue-700' : 'text-slate-400')}>
+          ({label})
+        </span>
+      )}
+    </h3>
+  )
+}
+
+function FallbackPotholeImage({ compact = false }: { compact?: boolean }) {
+  return (
+    <div
+      role="img"
+      aria-label="신고된 포트홀 사진 미리보기"
+      className={cn('relative h-full w-full overflow-hidden bg-slate-300', compact && 'rounded-xl')}
+    >
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,#9ca3af,#e5e7eb_42%,#52525b)]" />
+      <div className="absolute left-[-18%] top-[38%] h-8 w-[140%] rotate-[-9deg] bg-slate-800/80" />
+      <div className="absolute left-[-12%] top-[65%] h-8 w-[130%] rotate-[13deg] bg-slate-700/80" />
+      <div className="absolute left-[27%] top-[28%] h-[40%] w-[48%] rounded-[50%] bg-slate-950 shadow-[inset_0_14px_24px_rgba(0,0,0,0.7)]" />
+      <div className="absolute left-[39%] top-[39%] h-[21%] w-[25%] rounded-[50%] bg-stone-400/90" />
+      <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black text-slate-600 shadow-sm">
+        <ImageIcon size={12} aria-hidden="true" />
+        MOCK
+      </div>
+    </div>
+  )
+}
+
+function FallbackLocationMap() {
+  return (
+    <div
+      role="img"
+      aria-label="신고 위치 지도 미리보기"
+      className="absolute inset-0 overflow-hidden bg-slate-100"
+    >
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(148,163,184,0.18)_1px,transparent_1px),linear-gradient(rgba(148,163,184,0.18)_1px,transparent_1px)] bg-[size:28px_28px]" />
+      <div className="absolute left-[-18%] top-[20%] h-6 w-[140%] rotate-[-18deg] rounded-full bg-green-100 shadow-[0_0_0_6px_rgba(255,255,255,0.62)]" />
+      <div className="absolute left-[-18%] top-[54%] h-7 w-[142%] rotate-[14deg] rounded-full bg-slate-200 shadow-[0_0_0_6px_rgba(255,255,255,0.58)]" />
+      <div className="absolute left-[46%] top-[-28%] h-[160%] w-5 rotate-[9deg] rounded-full bg-blue-100 shadow-[0_0_0_5px_rgba(255,255,255,0.55)]" />
+      <MapPin
+        className="absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1/2 text-blue-700 drop-shadow-md"
+        size={46}
+        fill="#0B6DDE"
+        aria-hidden="true"
+      />
+    </div>
+  )
+}
+
+function UploadedPreview({
+  previewUrl,
+  fileName,
+  fileSize,
+  onClear,
+}: {
+  previewUrl: string | null
+  fileName: string
+  fileSize: string
+  onClear: () => void
+}) {
+  return (
+    <div>
+      <div className="relative h-[148px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm">
+        {previewUrl ? (
+          <img src={previewUrl} alt="신고된 포트홀 사진 미리보기" className="h-full w-full object-cover" />
+        ) : (
+          <AssetImage
+            sources={citizenReportMock.previewSources}
+            alt="신고된 포트홀 사진 미리보기"
+            className="h-full w-full object-cover"
+            fallback={<FallbackPotholeImage />}
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="첨부 사진 제거"
+          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 shadow-md transition hover:bg-slate-50"
+        >
+          <X size={17} aria-hidden="true" />
+        </button>
+      </div>
+      <p className="mt-3 text-[14px] font-black text-slate-700">{fileName}</p>
+      <p className="mt-1 text-[12px] font-semibold text-slate-500">{fileSize}</p>
+    </div>
+  )
+}
+
+function PhotoSection({
+  previewUrl,
+  fileName,
+  fileSize,
+  onFileChange,
+  onClearFile,
+}: {
+  previewUrl: string | null
+  fileName: string
+  fileSize: string
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onClearFile: () => void
+}) {
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <label
+        htmlFor="report-photo"
+        className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50/25 px-5 py-8 text-center transition hover:border-blue-300 hover:bg-blue-50/50"
+      >
+        <input
+          id="report-photo"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="sr-only"
+          onChange={onFileChange}
+        />
+        <CloudUpload size={48} strokeWidth={1.7} className="text-slate-600" aria-hidden="true" />
+        <span className="mt-4 text-[14px] font-black text-slate-700">파일을 드래그하거나 클릭하여 업로드</span>
+        <span className="mt-2 text-[12px] font-semibold text-slate-500">JPG, PNG 파일 (최대 10MB)</span>
+      </label>
+
+      <UploadedPreview previewUrl={previewUrl} fileName={fileName} fileSize={fileSize} onClear={onClearFile} />
+    </div>
+  )
+}
+
+function MapPreview() {
+  return (
+    <div className="relative h-[176px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 lg:h-[156px] lg:w-[270px]">
+      <AssetImage
+        sources={citizenReportMock.mapSources}
+        alt="신고 위치 지도 미리보기"
+        className="h-full w-full object-cover"
+        fallback={<FallbackLocationMap />}
+      />
+
+      <div className="absolute bottom-2 left-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <button
+          type="button"
+          aria-label="지도 확대"
+          className="flex h-8 w-8 items-center justify-center border-b border-slate-200 text-xl text-slate-700 transition hover:bg-blue-50"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          aria-label="지도 축소"
+          className="flex h-8 w-8 items-center justify-center text-xl text-slate-700 transition hover:bg-blue-50"
+        >
+          −
+        </button>
+      </div>
+
+      <button
+        type="button"
+        aria-label="현재 위치 보기"
+        className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-blue-50"
+      >
+        <Navigation size={17} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
+function LocationSection() {
+  return (
+    <div className="grid gap-5 lg:grid-cols-[270px_minmax(0,1fr)]">
+      <MapPreview />
+
+      <div className="min-w-0">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <MapPin size={18} className="text-blue-700" fill="#0B6DDE" aria-hidden="true" />
+            <span className="text-[14px] font-black text-slate-800">GPS 자동 위치</span>
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-[11px] font-black text-blue-700">
+              {citizenReportMock.gpsAccuracy}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12px] font-black text-slate-600 shadow-sm transition hover:bg-slate-50"
+          >
+            <RefreshCcw size={14} aria-hidden="true" />
+            위치 재설정
+          </button>
+        </div>
+
+        <div>
+          <label htmlFor="report-address" className="text-[12px] font-black text-slate-600">
+            주소
           </label>
-          <Card className="bg-slate-950 text-white">
-            <div className="flex gap-3">
-              <Sparkles className="h-6 w-6 text-amber-300" />
-              <p className="text-sm leading-6 text-slate-200">업로드된 사진은 AI가 포트홀 가능성을 먼저 판별합니다.</p>
-            </div>
-          </Card>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Button type="button" className="flex-1">신고 제출</Button>
-            <Link to="/report/ai-review" className="flex-1 rounded-lg border border-slate-200 bg-white px-4 py-3 text-center text-sm font-bold">AI 판별 결과 확인하기</Link>
+          <div className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_96px]">
+            <input
+              id="report-address"
+              value={citizenReportMock.address}
+              readOnly
+              className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 outline-none"
+            />
+            <button
+              type="button"
+              className="flex h-10 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              <Search size={14} aria-hidden="true" />
+              주소 검색
+            </button>
           </div>
         </div>
+
+        <div className="mt-3">
+          <label htmlFor="report-location-detail" className="text-[12px] font-black text-slate-600">
+            상세 위치 <span className="text-slate-400">(선택)</span>
+          </label>
+          <input
+            id="report-location-detail"
+            placeholder={citizenReportMock.detailLocationPlaceholder}
+            className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+          />
+        </div>
       </div>
-    </>
+    </div>
+  )
+}
+
+function SeveritySelector({
+  selectedSeverity,
+  onSelectSeverity,
+}: {
+  selectedSeverity: ReportSeverityId
+  onSelectSeverity: (severity: ReportSeverityId) => void
+}) {
+  return (
+    <div role="radiogroup" aria-label="위험 심각도" className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {riskSeverityOptions.map((option) => {
+        const selected = selectedSeverity === option.id
+        const colorClasses = severityColorClasses[option.color]
+
+        return (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onSelectSeverity(option.id)}
+            className={cn(
+              'flex min-h-[58px] items-center gap-3 rounded-lg border bg-white px-4 text-left transition hover:border-blue-200 hover:bg-blue-50/40',
+              selected
+                ? 'border-blue-600 bg-blue-50/40 shadow-[0_10px_20px_rgba(0,96,210,0.12)]'
+                : 'border-slate-200',
+            )}
+          >
+            <span
+              className={cn(
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-full ring-4',
+                colorClasses.dot,
+                colorClasses.ring,
+              )}
+              aria-hidden="true"
+            >
+              {selected && <CheckCircle2 size={15} className="text-white" />}
+            </span>
+
+            <span>
+              <span className={cn('block text-[14px] font-black', selected ? colorClasses.text : 'text-slate-700')}>
+                {option.label}
+              </span>
+              <span className="mt-1 block text-[11px] font-semibold text-slate-500">{option.description}</span>
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ReportInfoSection({
+  riskType,
+  selectedSeverity,
+  onRiskTypeChange,
+  onSelectSeverity,
+}: {
+  riskType: string
+  selectedSeverity: ReportSeverityId
+  onRiskTypeChange: (riskType: string) => void
+  onSelectSeverity: (severity: ReportSeverityId) => void
+}) {
+  return (
+    <div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="report-date" className="text-[12px] font-black text-slate-600">
+              신고 일시
+            </label>
+            <span className="text-[11px] font-semibold text-slate-400">(자동 기록)</span>
+          </div>
+          <div className="relative mt-2">
+            <input
+              id="report-date"
+              value={citizenReportMock.reportedAt}
+              readOnly
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-4 pr-10 text-[13px] font-semibold text-slate-700 outline-none"
+            />
+            <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600" size={18} aria-hidden="true" />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="risk-type" className="text-[12px] font-black text-slate-600">
+            위험 유형
+          </label>
+          <select
+            id="risk-type"
+            value={riskType}
+            onChange={(event) => onRiskTypeChange(event.target.value)}
+            className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+          >
+            {riskTypeOptions.map((option) => (
+              <option key={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <p className="text-[12px] font-black text-slate-600">위험 심각도</p>
+        <SeveritySelector selectedSeverity={selectedSeverity} onSelectSeverity={onSelectSeverity} />
+      </div>
+    </div>
+  )
+}
+
+function ReportForm({
+  selectedSeverity,
+  riskType,
+  description,
+  previewUrl,
+  fileName,
+  fileSize,
+  onFileChange,
+  onClearFile,
+  onRiskTypeChange,
+  onSelectSeverity,
+  onDescriptionChange,
+  onSubmit,
+}: {
+  selectedSeverity: ReportSeverityId
+  riskType: string
+  description: string
+  previewUrl: string | null
+  fileName: string
+  fileSize: string
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onClearFile: () => void
+  onRiskTypeChange: (riskType: string) => void
+  onSelectSeverity: (severity: ReportSeverityId) => void
+  onDescriptionChange: (description: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void
+}) {
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_16px_44px_rgba(15,40,70,0.07)]"
+    >
+      <div className="border-b border-slate-200 px-5 py-4">
+        <h2 className="text-[20px] font-black text-[#07182F]">새로운 위험 신고</h2>
+      </div>
+
+      <div className="border-b border-slate-200 px-5 py-4">
+        <SectionTitle number={1} title="사진 첨부" label="필수" />
+        <p className="mt-2 text-[12px] font-semibold text-slate-500">
+          포트홀, 도로 파손이 명확하게 보이도록 촬영해 주세요.
+        </p>
+        <div className="mt-4">
+          <PhotoSection
+            previewUrl={previewUrl}
+            fileName={fileName}
+            fileSize={fileSize}
+            onFileChange={onFileChange}
+            onClearFile={onClearFile}
+          />
+        </div>
+      </div>
+
+      <div className="border-b border-slate-200 px-5 py-4">
+        <SectionTitle number={2} title="위치 정보" label="필수" />
+        <div className="mt-4">
+          <LocationSection />
+        </div>
+      </div>
+
+      <div className="border-b border-slate-200 px-5 py-4">
+        <SectionTitle number={3} title="신고 정보" />
+        <div className="mt-3">
+          <ReportInfoSection
+            riskType={riskType}
+            selectedSeverity={selectedSeverity}
+            onRiskTypeChange={onRiskTypeChange}
+            onSelectSeverity={onSelectSeverity}
+          />
+        </div>
+      </div>
+
+      <div className="px-5 py-4">
+        <SectionTitle number={4} title="추가 설명" label="선택" />
+        <div className="relative mt-3">
+          <textarea
+            id="report-description"
+            maxLength={300}
+            value={description}
+            onChange={(event) => onDescriptionChange(event.target.value)}
+            placeholder="도로 상태, 크기, 발생 원인 등 추가 정보를 입력해 주세요. (최대 300자)"
+            className="h-[92px] w-full resize-none rounded-lg border border-slate-200 bg-white px-4 py-3 pr-20 text-[13px] font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+          />
+          <label htmlFor="report-description" className="sr-only">
+            추가 설명
+          </label>
+          <p className="pointer-events-none absolute bottom-3 right-4 text-[12px] font-semibold text-slate-400">
+            {description.length} / 300
+          </p>
+        </div>
+
+        <button
+          type="submit"
+          className="mt-5 flex h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[16px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(0,95,220,0.25)]"
+        >
+          <FileText size={20} aria-hidden="true" />
+          신고 접수
+        </button>
+
+        <div className="mt-3 flex items-center justify-center gap-2 text-slate-400">
+          <Lock size={14} aria-hidden="true" />
+          <p className="text-center text-[12px] font-semibold">
+            개인정보는 안전하게 보호되며, 신고 내용은 담당 기관에만 공유됩니다.
+          </p>
+        </div>
+      </div>
+    </form>
+  )
+}
+
+function AiGuideCard() {
+  return (
+    <section className="rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50 to-white p-5 shadow-[0_16px_40px_rgba(0,96,210,0.06)] sm:p-6">
+      <div className="flex items-center gap-2">
+        <h2 className="text-[18px] font-black text-blue-700">AI 자동 검증 안내</h2>
+        <Info size={16} className="text-blue-700" aria-hidden="true" />
+      </div>
+
+      <div className="mt-8 flex justify-center">
+        <div className="relative flex h-[116px] w-[116px] items-center justify-center rounded-[30px] bg-blue-100 text-blue-700 shadow-[0_20px_45px_rgba(0,96,210,0.12)]">
+          <Cpu size={62} strokeWidth={1.7} aria-hidden="true" />
+          <span className="absolute text-[32px] font-black">AI</span>
+        </div>
+      </div>
+
+      <p className="mt-7 text-center text-[14px] font-bold leading-relaxed text-slate-700">
+        신고 접수 후 AI가 이미지를 분석하여
+        <br className="hidden sm:block" />
+        포트홀 여부와 위험도를 자동으로 판단합니다.
+      </p>
+
+      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white/80">
+        {aiVerificationSteps.map((step) => (
+          <div key={step.id} className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0">
+            <CheckCircle2 size={18} className="shrink-0 text-blue-600" aria-hidden="true" />
+            <span className="text-[13px] font-semibold text-slate-600">{step.title}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-5 text-center text-[14px] font-black text-slate-600">
+        평균 처리 시간: <span className="text-blue-700">2~5분</span>
+      </p>
+    </section>
+  )
+}
+
+function RecentThumbnail({ report }: { report: RecentCitizenReport }) {
+  return (
+    <AssetImage
+      sources={report.thumbnailSources}
+      alt={`${report.title} 최근 신고 사진`}
+      className="h-[72px] w-[78px] rounded-xl object-cover"
+      fallback={
+        <div className="h-[72px] w-[78px] overflow-hidden rounded-xl">
+          <FallbackPotholeImage compact />
+        </div>
+      }
+    />
+  )
+}
+
+function RecentReportItem({ report }: { report: RecentCitizenReport }) {
+  return (
+    <article className="grid grid-cols-[minmax(0,1fr)_78px] gap-3 border-b border-slate-100 py-3 last:border-b-0">
+      <div className="min-w-0">
+        <span className={cn('inline-flex h-6 items-center rounded-full px-2 text-[11px] font-black', statusClasses[report.statusColor])}>
+          {report.status}
+        </span>
+        <h3 className="mt-2 truncate text-[14px] font-black text-[#07182F]">{report.title}</h3>
+        <p className="mt-1 flex min-w-0 items-center gap-1 text-[11px] font-semibold text-slate-500">
+          <MapPin size={12} className="shrink-0" aria-hidden="true" />
+          <span className="truncate">{report.location}</span>
+        </p>
+        <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+          <Calendar size={12} aria-hidden="true" />
+          {report.date}
+        </p>
+      </div>
+
+      <RecentThumbnail report={report} />
+    </article>
+  )
+}
+
+function RecentReportsCard() {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_34px_rgba(15,40,70,0.06)]">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[18px] font-black text-[#07182F]">최근 신고 내역</h2>
+        <button type="button" className="flex items-center gap-1 text-[12px] font-black text-blue-700 transition hover:text-blue-500">
+          전체 보기
+          <ChevronRight size={14} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="mt-3">
+        {recentCitizenReports.map((report) => (
+          <RecentReportItem key={report.id} report={report} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export function CitizenReportPage() {
+  const navigate = useNavigate()
+  const [selectedSeverity, setSelectedSeverity] = useState<ReportSeverityId>(citizenReportMock.defaultSeverity)
+  const [riskType, setRiskType] = useState(citizenReportMock.defaultRiskType)
+  const [description, setDescription] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+    }
+  }, [previewUrl])
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+
+    if (file) {
+      setSelectedFile(file)
+      setPreviewUrl(URL.createObjectURL(file))
+    }
+  }
+
+  const handleClearFile = () => {
+    setSelectedFile(null)
+    setPreviewUrl(null)
+  }
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    navigate('/report/ai-review')
+  }
+
+  const fileName = selectedFile?.name ?? citizenReportMock.uploadedFileName
+  const fileSize = selectedFile ? formatFileSize(selectedFile) : citizenReportMock.uploadedFileSize
+
+  return (
+    <div className="min-w-0">
+      <div>
+        <h1 className="text-[30px] font-black text-[#07182F] sm:text-[34px]">시민 신고</h1>
+        <p className="mt-2 text-[15px] font-semibold text-slate-500">
+          도로 파손, 포트홀 등 위험 요소를 신고해 주세요.
+        </p>
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_335px]">
+        <ReportForm
+          selectedSeverity={selectedSeverity}
+          riskType={riskType}
+          description={description}
+          previewUrl={previewUrl}
+          fileName={fileName}
+          fileSize={fileSize}
+          onFileChange={handleFileChange}
+          onClearFile={handleClearFile}
+          onRiskTypeChange={setRiskType}
+          onSelectSeverity={setSelectedSeverity}
+          onDescriptionChange={setDescription}
+          onSubmit={handleSubmit}
+        />
+
+        <aside className="grid gap-5 lg:grid-cols-2 xl:block xl:space-y-5">
+          <AiGuideCard />
+          <RecentReportsCard />
+        </aside>
+      </div>
+    </div>
   )
 }
