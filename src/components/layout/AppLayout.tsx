@@ -1,104 +1,230 @@
+import { type ElementType, type ReactNode, useState } from 'react'
 import {
   Bell,
   Building2,
-  Camera,
-  Gauge,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  FileText,
   LayoutDashboard,
-  Map,
-  Sparkles,
+  MapPin,
+  ShieldCheck,
 } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { cn } from '../../utils/cn'
 
-const navItems = [
-  { to: '/risk-map', label: '위험 예측지도', icon: Map },
-  { to: '/report', label: '시민 신고', icon: Camera },
-  { to: '/report/ai-review', label: 'AI 판별', icon: Sparkles },
-  { to: '/agency', label: '관할/보상', icon: Building2 },
-  { to: '/alerts', label: '위험 알림', icon: Bell },
-  { to: '/admin', label: '지자체 대시보드', icon: LayoutDashboard },
-]
-
-export function AppLayout() {
-  return (
-    <div className="min-h-svh bg-slate-100 text-slate-900">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r border-slate-200 bg-white px-5 py-6 xl:block">
-        <NavBrand />
-        <nav className="mt-8 space-y-2">
-          {navItems.map((item) => (
-            <NavItem key={item.to} {...item} />
-          ))}
-        </nav>
-      </aside>
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur xl:ml-72">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-          <NavBrand compact />
-          <nav className="hidden gap-1 lg:flex xl:hidden">
-            {navItems.slice(0, 5).map((item) => (
-              <NavItem key={item.to} {...item} compact />
-            ))}
-          </nav>
-          <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
-            Mock Demo
-          </div>
-        </div>
-      </header>
-      <main className="px-4 py-6 pb-24 xl:ml-72 xl:px-8">
-        <div className="mx-auto max-w-7xl">
-          <Outlet />
-        </div>
-      </main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white px-2 py-2 shadow-lg lg:hidden">
-        {navItems.slice(0, 5).map((item) => (
-          <NavItem key={item.to} {...item} mobile />
-        ))}
-      </nav>
-    </div>
-  )
-}
-
-function NavBrand({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-950 text-amber-300">
-        <Gauge className="h-5 w-5" />
-      </div>
-      {!compact && (
-        <div>
-          <p className="text-sm font-black text-slate-950">POTHOLE AI</p>
-          <p className="text-xs font-semibold text-slate-500">공공 안전 예측 플랫폼</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NavItem({
-  to,
-  label,
-  icon: Icon,
-  compact,
-  mobile,
-}: {
+type NavItem = {
   to: string
   label: string
-  icon: React.ElementType
-  compact?: boolean
-  mobile?: boolean
-}) {
+  icon: ElementType
+}
+
+type AssetImageProps = {
+  sources: string[]
+  alt: string
+  className: string
+  fallback: ReactNode
+}
+
+const navItems: NavItem[] = [
+  { to: '/risk-map', label: '위험 예측지도', icon: MapPin },
+  { to: '/report', label: '시민 신고', icon: ClipboardList },
+  { to: '/report/ai-review', label: 'AI 사진 판별', icon: ShieldCheck },
+  { to: '/agency', label: '관할기관 안내', icon: Building2 },
+  { to: '/agency', label: '보상 청구', icon: FileText },
+  { to: '/alerts', label: '실시간 알림', icon: Bell },
+  { to: '/admin', label: '관리자 대시보드', icon: LayoutDashboard },
+]
+
+function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
+  const [sourceIndex, setSourceIndex] = useState(0)
+  const src = sources[sourceIndex]
+
+  if (!src) {
+    return <>{fallback}</>
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setSourceIndex((current) => current + 1)}
+    />
+  )
+}
+
+function BrandLogo({ compact = false }: { compact?: boolean }) {
+  return (
+    <NavLink to="/risk-map" className="flex min-w-0 items-center gap-3" aria-label="포트홀 가드 AI 위험 예측지도로 이동">
+      <AssetImage
+        sources={['/assets/loading/pothole-guard-logo.png']}
+        alt="포트홀 가드 AI"
+        className={cn('h-auto object-contain', compact ? 'w-[154px]' : 'w-[190px]')}
+        fallback={
+          <div>
+            <p className={cn('font-black tracking-[-0.04em] text-[#07182F]', compact ? 'text-[20px]' : 'text-[25px]')}>
+              포트홀 가드 <span className="text-[#0B6DDE]">AI</span>
+            </p>
+            {!compact && (
+              <p className="mt-1 text-[10px] font-bold tracking-[-0.03em] text-slate-500">
+                AI로 예측하고, 함께 지키는 안전한 도로
+              </p>
+            )}
+          </div>
+        }
+      />
+    </NavLink>
+  )
+}
+
+function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavItem; compact?: boolean; mobile?: boolean }) {
+  const Icon = item.icon
+
   return (
     <NavLink
-      to={to}
+      to={item.to}
+      end={item.to === '/report'}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-lg text-sm font-bold transition',
-          mobile ? 'justify-center px-1 py-2 text-[11px]' : compact ? 'px-3 py-2' : 'px-4 py-3',
-          isActive ? 'bg-slate-950 text-white' : 'text-slate-600 hover:bg-slate-100',
+          'group flex items-center rounded-xl font-extrabold tracking-[-0.04em] transition focus-visible:outline-blue-400',
+          mobile
+            ? 'min-w-0 flex-col justify-center gap-1 px-1 py-2 text-[11px]'
+            : compact
+              ? 'gap-2 px-3 py-2 text-[13px]'
+              : 'gap-4 px-4 py-3 text-[15px]',
+          isActive
+            ? 'bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-white shadow-[0_14px_28px_rgba(0,95,220,0.25)]'
+            : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700',
         )
       }
     >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span className={cn(mobile && 'sr-only sm:not-sr-only')}>{label}</span>
+      {({ isActive }) => (
+        <>
+          <Icon
+            size={mobile ? 20 : compact ? 18 : 22}
+            className={cn('shrink-0', isActive ? 'text-white' : 'text-slate-500 group-hover:text-blue-700')}
+            fill={item.to === '/risk-map' && isActive ? 'currentColor' : 'none'}
+            aria-hidden="true"
+          />
+          <span className={cn('truncate', mobile && 'text-center leading-tight')}>{item.label}</span>
+        </>
+      )}
     </NavLink>
+  )
+}
+
+function PromoCard() {
+  return (
+    <div className="rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50 to-white p-5 text-center shadow-[0_18px_45px_rgba(0,96,210,0.07)]">
+      <p className="text-[14px] font-black leading-relaxed tracking-[-0.05em] text-blue-700">
+        AI가 도로를 지키고
+        <br />
+        시민이 함께 안전을 만듭니다.
+      </p>
+      <AssetImage
+        sources={['/assets/auth/signup-security.webp', '/assets/auth/signup-security.png']}
+        alt="안전한 도로 서비스를 상징하는 방패 일러스트"
+        className="mx-auto mt-4 h-[62px] w-[72px] object-contain"
+        fallback={
+          <div className="mx-auto mt-4 flex h-[62px] w-[72px] items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+            <ShieldCheck size={38} aria-hidden="true" />
+          </div>
+        }
+      />
+      <button
+        type="button"
+        className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-100 bg-white text-[13px] font-black tracking-[-0.04em] text-blue-700 shadow-sm transition hover:bg-blue-50"
+      >
+        서비스 소개 보기
+        <ChevronRight size={16} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
+function SidebarFooter() {
+  return (
+    <div className="rounded-2xl bg-white p-4 shadow-[0_16px_40px_rgba(15,40,70,0.05)]">
+      <AssetImage
+        sources={['/assets/loading/molit-logo.png']}
+        alt="국토교통부"
+        className="h-auto w-[132px] object-contain"
+        fallback={<span className="text-[17px] font-black tracking-[-0.04em] text-slate-700">국토교통부</span>}
+      />
+      <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-500">
+        © 2024 Ministry of Land,
+        <br />
+        Infrastructure and Transport.
+        <br />
+        All rights reserved.
+      </p>
+    </div>
+  )
+}
+
+function DesktopSidebar() {
+  return (
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[268px] flex-col border-r border-slate-200 bg-white px-5 py-7 shadow-[8px_0_30px_rgba(15,40,70,0.04)] xl:flex">
+      <BrandLogo />
+      <nav className="mt-10 space-y-2" aria-label="서비스 메뉴">
+        {navItems.map((item, index) => (
+          <SidebarNavItem key={`${item.to}-${index}`} item={item} />
+        ))}
+      </nav>
+      <div className="relative mt-auto space-y-7">
+        <PromoCard />
+        <SidebarFooter />
+        <button
+          type="button"
+          aria-label="사이드바 접기"
+          className="absolute bottom-3 right-1 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-md transition hover:bg-slate-50"
+        >
+          <ChevronLeft size={20} aria-hidden="true" />
+          <ChevronLeft size={20} className="-ml-3" aria-hidden="true" />
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+function MobileHeader() {
+  return (
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur xl:hidden">
+      <div className="flex items-center justify-between gap-3">
+        <BrandLogo compact />
+        <span className="rounded-full bg-blue-50 px-3 py-1 text-[12px] font-black text-blue-700">Mock Demo</span>
+      </div>
+      <nav className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label="빠른 메뉴">
+        {navItems.slice(0, 7).map((item, index) => (
+          <SidebarNavItem key={`${item.to}-${index}-compact`} item={item} compact />
+        ))}
+      </nav>
+    </header>
+  )
+}
+
+function MobileBottomNav() {
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white px-2 py-2 shadow-[0_-10px_28px_rgba(15,40,70,0.08)] lg:hidden">
+      {navItems.slice(0, 5).map((item, index) => (
+        <SidebarNavItem key={`${item.to}-${index}-mobile`} item={item} mobile />
+      ))}
+    </nav>
+  )
+}
+
+export function AppLayout() {
+  return (
+    <div className="min-h-svh overflow-x-hidden bg-[#F8FBFF] text-slate-900">
+      <DesktopSidebar />
+      <MobileHeader />
+      <main className="min-w-0 px-4 py-5 pb-24 sm:px-6 lg:pb-8 xl:ml-[268px] xl:px-8 xl:py-7">
+        <div className="mx-auto w-full max-w-[1260px]">
+          <Outlet />
+        </div>
+      </main>
+      <MobileBottomNav />
+    </div>
   )
 }

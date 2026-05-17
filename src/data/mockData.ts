@@ -4,7 +4,10 @@ import type {
   CitizenReport,
   CompensationDraft,
   PotholeRiskZone,
-  WeatherAlert,
+  RiskMapFilter,
+  RiskMapHighZone,
+  RiskMapLegendItem,
+  RiskMapStats,  WeatherAlert,
 } from '../types'
 
 export const potholeRiskZones: PotholeRiskZone[] = [
@@ -200,5 +203,114 @@ export const adminReportRows: AdminReportRow[] = [
     untreatedDays: 0,
     status: 'completed',
     priorityScore: 31,
+  },
+]
+export const riskMapStats: RiskMapStats = {
+  highRiskCount: 5,
+  recentReportCount: 128,
+  aiAccuracy: 91.3,
+  highRiskDelta: 2,
+  reportDeltaPercent: 23,
+  accuracyDeltaPercent: 6.2,
+}
+
+export const riskMapFilters: RiskMapFilter[] = [
+  {
+    id: 'rainfall',
+    title: '강수 이력',
+    value: '최근 7일 (누적)',
+  },
+  {
+    id: 'roadYear',
+    title: '도로 준공연도',
+    value: '전체',
+  },
+  {
+    id: 'sewerAging',
+    title: '하수관 노후도',
+    value: '전체',
+  },
+  {
+    id: 'undergroundConstruction',
+    title: '지하 공사 현황',
+    value: '전체',
+  },
+]
+
+export const riskHighZones: RiskMapHighZone[] = [
+  {
+    id: 'risk-zone-gangnam-001',
+    riskGrade: '긴급',
+    roadName: '강남구 언주로 123',
+    detailLocation: '언주역 사거리 인근',
+    riskPercent: 83,
+    reasons: ['강수 영향', '하수관 노후', '지하 공사'],
+    recentReportTime: '15분 전',
+    reportCount: 3,
+    status: '점검 중',
+    expectedAction: '당일 내',
+  },
+  {
+    id: 'risk-zone-jongno-002',
+    riskGrade: '주의',
+    roadName: '종로구 창경궁로 256',
+    detailLocation: '혜화역 인근',
+    riskPercent: 68,
+    reasons: ['강수 영향', '도로 노후'],
+    recentReportTime: '1시간 전',
+    reportCount: 5,
+    status: '접수 완료',
+    expectedAction: '1~2일 내',
+  },
+  {
+    id: 'risk-zone-mapo-003',
+    riskGrade: '관심',
+    roadName: '마포구 월드컵로 45',
+    detailLocation: '홍대입구역 인근',
+    riskPercent: 36,
+    reasons: ['강수 영향', '포장 균열'],
+    recentReportTime: '3시간 전',
+    reportCount: 2,
+    status: '모니터링',
+    expectedAction: '3~5일 내',
+  },
+  {
+    id: 'risk-zone-seocho-004',
+    riskGrade: '안전/관찰',
+    roadName: '서초구 반포대로 98',
+    detailLocation: '고속터미널역 인근',
+    riskPercent: 12,
+    reasons: ['양호'],
+    recentReportTime: '1일 전',
+    reportCount: 1,
+    status: '보수 완료',
+    expectedAction: '완료',
+  },
+]
+
+export const riskLegend: RiskMapLegendItem[] = [
+  {
+    id: 'safe',
+    label: '안전',
+    range: '0~20%',
+    color: 'green',
+  },
+  {
+    id: 'attention',
+    label: '관심',
+    range: '20~40%',
+    color: 'yellow',
+  },
+  {
+    id: 'caution',
+    label: '주의',
+    range: '40~70%',
+    color: 'orange',
+  },
+  {
+    id: 'danger',
+    label: '위험',
+    range: '70% 이상',
+    color: 'red',
   },
 ]
