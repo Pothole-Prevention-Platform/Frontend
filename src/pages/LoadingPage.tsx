@@ -1,58 +1,169 @@
-import { ArrowRight, MapPinned } from 'lucide-react'
-import { PublicLayout } from '../components/layout/PublicLayout'
-import { ButtonLink } from '../components/ui/Button'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Check, Cog, LoaderCircle } from 'lucide-react'
+
+const progressSteps = [
+  { label: '데이터 동기화', status: '완료', icon: Check, state: 'done' },
+  { label: '지도 로딩', status: '진행 중', icon: LoaderCircle, state: 'active' },
+  { label: '알림 설정 확인', status: '대기 중', icon: Cog, state: 'waiting' },
+] as const
 
 export function LoadingPage() {
+  const navigate = useNavigate()
+  const [progress, setProgress] = useState(0)
+
+  const isDataDone = progress >= 34
+  const isMapDone = progress >= 78
+  const isReady = progress >= 100
+
+  useEffect(() => {
+    const duration = 2600
+    const startedAt = performance.now()
+    let animationFrameId = 0
+
+    const animate = (now: number) => {
+      const elapsed = now - startedAt
+      const nextProgress = Math.min(Math.round((elapsed / duration) * 100), 100)
+
+      setProgress(nextProgress)
+
+      if (nextProgress < 100) {
+        animationFrameId = window.requestAnimationFrame(animate)
+      } else {
+        window.setTimeout(() => {
+          navigate('/auth/login', { replace: true })
+        }, 350)
+      }
+    }
+
+    animationFrameId = window.requestAnimationFrame(animate)
+
+    return () => window.cancelAnimationFrame(animationFrameId)
+  }, [navigate])
+
   return (
-    <PublicLayout>
-      <section className="relative flex min-h-svh items-center px-5 py-12">
-        <div className="absolute inset-0 opacity-40 map-grid" />
-        <div className="absolute bottom-0 left-1/2 h-80 w-[780px] -translate-x-1/2 rounded-t-full bg-slate-900" />
-        <div className="absolute bottom-16 left-1/2 h-56 w-28 -translate-x-1/2 skew-x-[-10deg] rounded-t-3xl bg-slate-800">
-          <div className="lane-mark absolute left-1/2 top-8 h-44 w-1 -translate-x-1/2 rotate-90" />
-        </div>
-        <div className="relative z-10 mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
-          <div>
-            <p className="text-sm font-black text-amber-300">POTHOLE AI</p>
-            <h1 className="mt-5 text-4xl font-black leading-tight md:text-6xl">
-              AI 포트홀 위험 예측 및 신고 플랫폼
-            </h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">
-              위험 예측부터 시민 신고, 관할 기관 연결, 보상 청구 보조까지 한 번에
+    <main className="relative flex min-h-svh items-center justify-center overflow-hidden bg-white px-4 py-10 text-slate-950">
+      <img
+        src="/assets/loading/loading-map-left.webp"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-0 h-full w-[52%] object-cover object-left opacity-70"
+      />
+      <img
+        src="/assets/loading/loading-map-right.webp"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 right-0 h-full w-[52%] object-cover object-right opacity-70"
+      />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.94)_0%,rgba(255,255,255,0.82)_36%,rgba(255,255,255,0.72)_62%,rgba(255,255,255,0.95)_100%)]" />
+
+      <section className="relative z-10 flex w-full max-w-[760px] flex-col items-center text-center">
+        <img
+          src="/assets/loading/pothole-guard-logo.png"
+          alt="포트홀 가드 AI"
+          className="h-[116px] w-auto object-contain sm:h-[150px]"
+        />
+
+        <h1 className="mt-5 text-[24px] font-black tracking-[-0.05em] text-[#07182F] sm:text-[28px]">
+          AI로 예측하고, 함께 지키는 안전한 도로
+        </h1>
+
+        <div className="mt-9 w-full max-w-[560px] rounded-[20px] border border-slate-200/80 bg-white/90 px-5 py-8 shadow-[0_24px_70px_rgba(20,68,120,0.14)] backdrop-blur-xl sm:px-8">
+          <div className="flex items-center justify-center gap-4">
+            <LoaderCircle
+              className="h-8 w-8 animate-spin text-blue-600"
+              strokeWidth={3}
+              aria-hidden="true"
+            />
+            <p className="text-[20px] font-black tracking-[-0.04em] text-slate-900">
+              {isReady ? '위험 지도 준비 완료' : '위험 지도를 불러오는 중'}
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <ButtonLink to="/onboarding" size="lg" className="bg-amber-400 text-slate-950 hover:bg-amber-300">
-                시작하기 <ArrowRight className="h-5 w-5" />
-              </ButtonLink>
-              <ButtonLink to="/risk-map" size="lg" variant="secondary" className="border-white/20 bg-white/10 text-white hover:bg-white/15">
-                위험지도 바로 보기
-              </ButtonLink>
+          </div>
+
+          <div
+            className="mx-auto mt-8 flex h-[128px] w-[128px] items-center justify-center rounded-full p-3 shadow-[0_12px_28px_rgba(11,109,222,0.18)]"
+            style={{
+              background: `conic-gradient(#0B6DDE ${progress * 3.6}deg, #dbeafe 0deg)`,
+            }}
+            role="progressbar"
+            aria-label="위험 지도 로딩 진행률"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
+          >
+            <div className="flex h-full w-full items-center justify-center rounded-full bg-white">
+              <span className="text-[34px] font-black tracking-[-0.04em] text-slate-900">
+                {progress}
+                <span className="text-[18px]">%</span>
+              </span>
             </div>
           </div>
-          <div className="rounded-3xl border border-white/10 bg-white/10 p-6 shadow-2xl backdrop-blur">
-            <div className="flex items-center justify-between">
-              <span className="rounded-full bg-red-500/20 px-3 py-1 text-sm font-bold text-red-200">위험 분석 중</span>
-              <MapPinned className="h-7 w-7 text-amber-300" />
-            </div>
-            <div className="mt-8 space-y-4">
-              {['공공 데이터 수집', '강수량·노후도 가중치 계산', '시민 신고 위험도 반영'].map((label, index) => (
-                <div key={label}>
-                  <div className="mb-2 flex justify-between text-sm">
-                    <span>{label}</span>
-                    <span>{82 + index * 5}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-white/10">
-                    <div className="h-2 rounded-full bg-amber-400" style={{ width: `${82 + index * 5}%` }} />
-                  </div>
+
+          <p className="mt-5 text-sm font-bold tracking-[-0.03em] text-slate-500">
+            잠시만 기다려주세요. 더 안전한 도로를 준비하고 있어요.
+          </p>
+
+          <div className="mt-7 h-px bg-slate-200" />
+
+          <div className="mt-7 grid grid-cols-3 items-start gap-2">
+            {progressSteps.map(({ label, status, icon: Icon, state }, index) => {
+              const isStepDone = index === 0 ? isDataDone : index === 1 ? isMapDone : isReady
+              const isStepActive =
+                (index === 0 && !isDataDone) ||
+                (index === 1 && isDataDone && !isMapDone) ||
+                (index === 2 && isMapDone && !isReady)
+              const displayStatus = isStepDone ? '완료' : isStepActive ? '진행 중' : status
+              const StepIcon = isStepDone ? Check : isStepActive ? LoaderCircle : Icon
+
+              return (
+              <div key={label} className="relative flex flex-col items-center">
+                {index > 0 ? (
+                  <div className="absolute right-1/2 top-5 h-px w-full border-t border-dashed border-blue-200" />
+                ) : null}
+                <div
+                  className={`relative z-10 flex h-11 w-11 items-center justify-center rounded-full ${
+                    isStepDone || isStepActive
+                      ? 'bg-blue-600 text-white shadow-[0_10px_20px_rgba(37,99,235,0.22)]'
+                      : state === 'waiting'
+                      ? 'bg-slate-100 text-slate-500'
+                      : 'bg-blue-100 text-blue-600'
+                  }`}
+                >
+                  <StepIcon
+                    className={isStepActive ? 'h-5 w-5 animate-spin' : 'h-5 w-5'}
+                    strokeWidth={2.5}
+                    aria-hidden="true"
+                  />
                 </div>
-              ))}
-            </div>
-            <div className="mt-8 rounded-2xl bg-slate-950/80 p-5">
-              <div className="h-36 rounded-xl border border-amber-300/20 bg-[radial-gradient(circle_at_35%_45%,rgba(239,68,68,0.6),transparent_18%),radial-gradient(circle_at_72%_55%,rgba(251,191,36,0.45),transparent_16%)]" />
-            </div>
+                <p className="mt-3 text-[13px] font-black tracking-[-0.03em] text-slate-800">
+                  {label}
+                </p>
+                <p className="mt-1 text-xs font-bold tracking-[-0.03em] text-slate-500">
+                  {displayStatus}
+                </p>
+              </div>
+              )
+            })}
           </div>
+        </div>
+
+        <footer className="mt-10 flex flex-col items-center gap-4">
+          <img
+            src="/assets/loading/molit-logo.png"
+            alt="국토교통부"
+            className="h-10 w-auto object-contain"
+          />
+          <p className="text-xs font-medium text-slate-500">
+            © 2024 Ministry of Land, Infrastructure and Transport. All rights reserved.
+          </p>
+        </footer>
+
+        <div className="sr-only">
+          <Link to="/auth/login" replace>
+            로그인으로 이동
+          </Link>
         </div>
       </section>
-    </PublicLayout>
+    </main>
   )
 }

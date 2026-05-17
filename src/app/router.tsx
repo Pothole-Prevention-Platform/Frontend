@@ -14,6 +14,7 @@ import { SignupPage } from '../pages/SignupPage'
 
 export const router = createBrowserRouter([
   { path: '/', element: <LoadingPage /> },
+  { path: '/setup', element: <InitialSetupPage /> },
   { path: '/onboarding', element: <InitialSetupPage /> },
   { path: '/auth/login', element: <LoginPage /> },
   { path: '/auth/signup', element: <SignupPage /> },

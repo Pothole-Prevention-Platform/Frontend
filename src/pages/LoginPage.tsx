@@ -1,26 +1,303 @@
-import { Link } from 'react-router-dom'
-import { AuthLayout } from '../components/layout/AuthLayout'
-import { Button } from '../components/ui/Button'
-import { Card } from '../components/ui/Card'
-import { Input } from '../components/ui/Input'
+import { type FormEvent, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  AlertTriangle,
+  CloudUpload,
+  Cpu,
+  Eye,
+  LockKeyhole,
+  Mail,
+  MapPin,
+  Shield,
+  ShieldCheck,
+} from 'lucide-react'
+
+type HeroImageState = 'webp' | 'png' | 'hidden'
+
+const heroImagePaths: Record<Exclude<HeroImageState, 'hidden'>, string> = {
+  webp: '/assets/auth/login-hero.webp',
+  png: '/assets/auth/login-hero.png',
+}
+
+function BrandLogo() {
+  const [showImage, setShowImage] = useState(true)
+
+  return (
+    <Link to="/" className="flex items-center gap-4" aria-label="포트홀 가드 AI 홈으로 이동">
+      {showImage ? (
+        <img
+          src="/assets/loading/pothole-guard-logo.png"
+          alt="포트홀 가드 AI"
+          className="h-16 w-auto object-contain sm:h-20 lg:h-24"
+          onError={() => setShowImage(false)}
+        />
+      ) : (
+        <div>
+          <h1 className="text-[28px] font-black text-[#0B1B35] sm:text-[34px]">
+            포트홀 가드 <span className="text-[#0B6DDE]">AI</span>
+          </h1>
+          <p className="mt-1 text-xs font-bold text-slate-500">
+            AI로 예측하고, 함께 지키는 안전한 포트홀
+          </p>
+        </div>
+      )}
+    </Link>
+  )
+}
+
+function MinistryLogo() {
+  const [showImage, setShowImage] = useState(true)
+
+  return (
+    <div className="flex items-center gap-3">
+      {showImage ? (
+        <img
+          src="/assets/loading/molit-logo.png"
+          alt="국토교통부"
+          className="h-10 w-auto object-contain sm:h-12"
+          onError={() => setShowImage(false)}
+        />
+      ) : (
+        <span className="text-lg font-black text-slate-700">국토교통부</span>
+      )}
+    </div>
+  )
+}
+
+function HeroImageLayer() {
+  const [imageState, setImageState] = useState<HeroImageState>('webp')
+
+  if (imageState === 'hidden') {
+    return null
+  }
+
+  return (
+    <img
+      src={heroImagePaths[imageState]}
+      alt=""
+      aria-hidden="true"
+      className="absolute inset-0 h-full w-full object-cover object-center"
+      onError={() => setImageState(imageState === 'webp' ? 'png' : 'hidden')}
+    />
+  )
+}
+
+function DataNodes() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 hidden md:block">
+      <div className="absolute right-[22%] top-[37%] flex h-[108px] w-[108px] items-center justify-center rounded-[28px] border border-blue-100 bg-white/60 text-blue-600 shadow-[0_24px_55px_rgba(25,95,180,0.14)] backdrop-blur-md">
+        <Cpu size={52} strokeWidth={1.7} aria-hidden="true" />
+      </div>
+      <div className="absolute right-[13%] top-[54%] flex h-[78px] w-[78px] items-center justify-center rounded-full border border-blue-100 bg-white/60 text-blue-600 shadow-[0_24px_55px_rgba(25,95,180,0.14)] backdrop-blur-md">
+        <Shield size={38} strokeWidth={2} aria-hidden="true" />
+      </div>
+      <div className="absolute bottom-[22%] right-[12%] flex h-[88px] w-[88px] items-center justify-center rounded-full bg-gradient-to-b from-[#147BEE] to-[#075AD0] text-white shadow-[0_22px_45px_rgba(0,90,200,0.25)]">
+        <MapPin size={54} fill="white" strokeWidth={1.8} aria-hidden="true" />
+      </div>
+      <div className="absolute right-[12%] top-[42%] text-blue-400">
+        <CloudUpload size={66} strokeWidth={1.8} aria-hidden="true" />
+      </div>
+    </div>
+  )
+}
+
+function RiskCard() {
+  return (
+    <div className="absolute bottom-[18%] left-[40%] z-20 hidden w-[235px] rounded-2xl border border-white/75 bg-white/90 p-5 shadow-[0_22px_45px_rgba(21,76,140,0.18)] backdrop-blur-xl sm:block lg:left-[38%]">
+      <div className="absolute -bottom-7 left-10 h-0 w-0 border-x-[18px] border-t-[28px] border-x-transparent border-t-white/90" />
+      <div className="flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500 text-white">
+          <AlertTriangle size={17} fill="white" strokeWidth={2.5} aria-hidden="true" />
+        </div>
+        <p className="text-[17px] font-black text-slate-900">포트홀 위험 감지</p>
+      </div>
+      <div className="mt-5 flex items-center justify-between">
+        <span className="text-sm font-bold text-slate-600">위험도</span>
+        <span className="text-[19px] font-black text-red-500">85%</span>
+      </div>
+      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-red-100">
+        <div className="h-full w-[85%] rounded-full bg-red-500" />
+      </div>
+      <div className="mt-5">
+        <p className="text-sm font-bold text-slate-600">위치</p>
+        <p className="mt-2 text-[15px] font-extrabold text-slate-700">서울특별시 강남구 테헤란로 123</p>
+      </div>
+    </div>
+  )
+}
+
+function LoginHeroPanel() {
+  return (
+    <section className="relative min-h-[420px] overflow-hidden bg-[#eef7ff] px-6 py-8 sm:px-10 lg:min-h-svh lg:px-12 lg:py-11 xl:px-14">
+      <HeroImageLayer />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(241,248,255,0.96)_0%,rgba(235,246,255,0.82)_48%,rgba(235,246,255,0.38)_100%)]" />
+      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#eef7ff] to-transparent" />
+      <DataNodes />
+      <RiskCard />
+
+      <div className="relative z-30 flex min-h-[360px] flex-col justify-between lg:min-h-[calc(100svh-96px)]">
+        <div>
+          <BrandLogo />
+          <div className="mt-10 max-w-[620px] sm:mt-14 lg:mt-[70px]">
+            <h2 className="text-[38px] font-black leading-tight text-[#07182F] sm:text-[48px] lg:text-[56px]">
+              AI로 예측하고,
+              <br />
+              함께 지키는 <span className="bg-gradient-to-r from-[#0A5FCB] to-[#1687FF] bg-clip-text text-transparent">안전한 도로</span>
+            </h2>
+            <p className="mt-6 max-w-[560px] text-[17px] font-medium leading-[1.7] text-slate-600 sm:text-[20px]">
+              AI가 포트홀 위험을 예측하고 시민 신고를 연결해 모두가 안심하고 이동할 수 있는 도로 환경을 만듭니다.
+            </p>
+          </div>
+        </div>
+
+        <footer className="mt-12 flex flex-col gap-4 text-slate-500 sm:flex-row sm:items-end sm:gap-8 lg:gap-10">
+          <MinistryLogo />
+          <p className="text-xs font-medium leading-relaxed sm:text-[13px]">
+            © 2024 Ministry of Land, Infrastructure and Transport.
+            <br />
+            All rights reserved.
+          </p>
+        </footer>
+      </div>
+    </section>
+  )
+}
+
+function LoginCard() {
+  const navigate = useNavigate()
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    navigate('/setup')
+  }
+
+  return (
+    <div className="w-full max-w-[560px] rounded-2xl border border-slate-200 bg-white/95 px-6 py-9 shadow-[0_28px_80px_rgba(15,40,70,0.15)] sm:px-10 lg:px-12 lg:py-14 xl:px-14">
+      <div className="flex flex-col items-center text-center">
+        <div className="flex h-[70px] w-[70px] items-center justify-center rounded-full bg-blue-100 text-blue-700">
+          <LockKeyhole size={31} strokeWidth={2.1} aria-hidden="true" />
+        </div>
+        <h2 className="mt-7 text-[32px] font-black text-[#07182F] sm:text-[34px]">로그인</h2>
+        <p className="mt-4 text-base font-semibold text-slate-500">포트홀 가드 AI 서비스에 오신 것을 환영합니다.</p>
+      </div>
+
+      <form className="mt-10" onSubmit={handleSubmit}>
+        <label className="relative block" htmlFor="email">
+          <span className="sr-only">이메일 주소</span>
+          <Mail
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600"
+            size={22}
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
+          <input
+            id="email"
+            type="email"
+            name="email"
+            autoComplete="email"
+            placeholder="이메일 주소를 입력하세요"
+            className="h-[60px] w-full rounded-lg border border-slate-200 bg-white px-14 text-base font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 sm:h-[64px]"
+          />
+        </label>
+
+        <label className="relative mt-4 block" htmlFor="password">
+          <span className="sr-only">비밀번호</span>
+          <LockKeyhole
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600"
+            size={22}
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
+          <input
+            id="password"
+            type="password"
+            name="password"
+            autoComplete="current-password"
+            placeholder="비밀번호를 입력하세요"
+            className="h-[60px] w-full rounded-lg border border-slate-200 bg-white px-14 pr-14 text-base font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 sm:h-[64px]"
+          />
+          <button
+            type="button"
+            aria-label="비밀번호 보기"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-blue-600"
+          >
+            <Eye size={24} strokeWidth={1.9} aria-hidden="true" />
+          </button>
+        </label>
+
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              className="h-[22px] w-[22px] rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-[15px] font-semibold text-slate-700">자동 로그인</span>
+          </label>
+
+          <div className="flex items-center gap-4 text-[15px] font-black text-blue-700">
+            <button type="button" className="hover:text-blue-500">
+              비밀번호 찾기
+            </button>
+            <span className="h-4 w-px bg-slate-300" />
+            <Link to="/auth/signup" className="hover:text-blue-500">
+              회원가입
+            </Link>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="mt-9 h-[64px] w-full rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-xl font-black text-white shadow-[0_14px_24px_rgba(0,95,220,0.25)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_30px_rgba(0,95,220,0.32)] sm:h-[66px]"
+        >
+          로그인
+        </button>
+      </form>
+
+      <div className="mt-9 flex items-center gap-5">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span className="text-[15px] font-bold text-slate-500">또는</span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
+
+      <div className="mt-8 space-y-3">
+        <button
+          type="button"
+          className="flex h-[60px] w-full items-center justify-center gap-4 rounded-lg border border-slate-200 bg-white text-base font-extrabold text-slate-800 transition hover:border-blue-200 hover:bg-blue-50 sm:h-[64px] sm:text-[17px]"
+        >
+          <span className="text-[30px] font-black text-[#4285F4]" aria-hidden="true">
+            G
+          </span>
+          Google로 로그인
+        </button>
+
+        <button
+          type="button"
+          className="flex h-[60px] w-full items-center justify-center gap-4 rounded-lg border border-slate-200 bg-white text-base font-extrabold text-slate-800 transition hover:border-yellow-200 hover:bg-yellow-50 sm:h-[64px] sm:text-[17px]"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FEE500]" aria-hidden="true">
+            <span className="h-4 w-5 rounded-[50%] bg-[#371D1E]" />
+          </span>
+          카카오로 로그인
+        </button>
+      </div>
+
+      <div className="mt-9 flex items-center justify-center gap-2 text-slate-500">
+        <ShieldCheck size={21} strokeWidth={1.8} aria-hidden="true" />
+        <p className="text-[15px] font-semibold">사용자 정보를 안전하게 보호합니다.</p>
+      </div>
+    </div>
+  )
+}
 
 export function LoginPage() {
   return (
-    <AuthLayout title="포트홀 위험을 미리 보고 빠르게 신고하세요">
-      <Card title="로그인" description="데모용 화면이며 실제 로그인은 동작하지 않습니다." className="p-6">
-        <form className="space-y-4">
-          <Input label="이메일" name="email" type="email" placeholder="user@example.com" />
-          <Input label="비밀번호" name="password" type="password" placeholder="비밀번호 입력" />
-          <Button type="button" className="w-full">로그인</Button>
-        </form>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <Button type="button" variant="secondary">공공 계정</Button>
-          <Button type="button" variant="secondary">민간 계정</Button>
-        </div>
-        <p className="mt-5 text-center text-sm text-slate-500">
-          계정이 없나요? <Link to="/auth/signup" className="font-bold text-slate-950">회원가입</Link>
-        </p>
-      </Card>
-    </AuthLayout>
+    <main className="min-h-svh bg-white">
+      <div className="grid min-h-svh grid-cols-1 lg:grid-cols-[1.05fr_0.95fr]">
+        <LoginHeroPanel />
+        <section className="flex min-h-svh items-center justify-center bg-white px-4 py-10 sm:px-8 lg:px-10 lg:py-12">
+          <LoginCard />
+        </section>
+      </div>
+    </main>
   )
 }
