@@ -154,16 +154,16 @@ function SignupHeader() {
 
 function BenefitCard() {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,40,70,0.05)]">
+    <div className="w-full max-w-[calc(100vw-40px)] min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-[0_18px_45px_rgba(15,40,70,0.05)]">
       <div className="space-y-6">
         {benefitItems.map((item) => (
-          <div key={item.title} className="flex gap-4">
+          <div key={item.title} className="grid min-w-0 grid-cols-[58px_minmax(0,1fr)] gap-4">
             <div className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-blue-700 shadow-sm">
               {item.icon}
             </div>
-            <div className="pt-1">
+            <div className="min-w-0 flex-1 pt-1">
               <h3 className="text-base font-black text-[#07182F]">{item.title}</h3>
-              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">{item.description}</p>
+              <p className="mt-2 break-all text-sm font-semibold leading-relaxed text-slate-600 sm:break-words">{item.description}</p>
             </div>
           </div>
         ))}
@@ -195,10 +195,10 @@ function SecurityImage() {
 
 function SignupIntroPanel() {
   return (
-    <aside className="mx-auto flex w-full max-w-[420px] flex-col justify-center py-6 lg:min-h-[720px] lg:py-10">
+    <aside className="mx-auto flex w-full min-w-0 max-w-[420px] flex-col justify-center py-6 lg:min-h-[720px] lg:py-10">
       <div className="text-center">
         <h1 className="text-[34px] font-black text-[#07182F] sm:text-[38px]">회원가입</h1>
-        <p className="mt-4 text-sm font-bold text-slate-500 sm:text-base">
+        <p className="mt-4 break-all text-sm font-bold text-slate-500 sm:break-words sm:text-base">
           포트홀 가드 AI와 함께 더 안전한 사회를 만들어가요.
         </p>
       </div>
@@ -207,9 +207,9 @@ function SignupIntroPanel() {
         <BenefitCard />
       </div>
 
-      <div className="mt-8 flex items-center gap-5 rounded-2xl border border-blue-100 bg-blue-50/75 p-5 shadow-[0_18px_45px_rgba(0,96,210,0.06)]">
+      <div className="mt-8 grid w-full max-w-[calc(100vw-40px)] min-w-0 grid-cols-[86px_minmax(0,1fr)] items-center gap-4 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/75 p-5 shadow-[0_18px_45px_rgba(0,96,210,0.06)] sm:gap-5">
         <SecurityImage />
-        <p className="text-[17px] font-black leading-relaxed text-blue-700">
+        <p className="min-w-0 flex-1 break-all text-[17px] font-black leading-relaxed text-blue-700 sm:break-words">
           AI가 도로를 지키고
           <br />
           시민이 함께 안전을 만듭니다.
@@ -405,7 +405,7 @@ function SignupFormCard() {
   }
 
   return (
-    <section className="w-full rounded-2xl border border-slate-200 bg-white/95 px-5 py-7 shadow-[0_22px_65px_rgba(15,40,70,0.12)] sm:px-8 lg:max-w-[870px]">
+    <section className="w-full max-w-[calc(100vw-40px)] rounded-2xl border border-slate-200 bg-white/95 px-5 py-7 shadow-[0_22px_65px_rgba(15,40,70,0.12)] sm:max-w-none sm:px-8 lg:max-w-[870px]">
       <div>
         <h2 className="text-2xl font-black text-[#07182F]">회원 정보 입력</h2>
         <p className="mt-3 text-sm font-semibold text-slate-500">정확한 정보 입력은 안전한 서비스 이용을 위해 중요합니다.</p>
@@ -505,9 +505,9 @@ export function SignupPage() {
     <main className="min-h-svh overflow-x-hidden bg-gradient-to-br from-white via-[#FAFCFF] to-[#F3F8FF] text-slate-900">
       <SignupHeader />
 
-      <div className="grid gap-8 px-5 pb-10 sm:px-8 lg:min-h-[calc(100svh-176px)] lg:grid-cols-[minmax(320px,440px)_1fr] lg:px-9">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-8 px-5 pb-10 sm:px-8 lg:min-h-[calc(100svh-176px)] lg:grid-cols-[minmax(320px,440px)_minmax(0,1fr)] lg:px-9">
         <SignupIntroPanel />
-        <div className="flex items-center justify-center">
+        <div className="flex min-w-0 items-center justify-center">
           <SignupFormCard />
         </div>
       </div>
