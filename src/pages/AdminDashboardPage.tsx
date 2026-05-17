@@ -38,6 +38,7 @@ import type {
   AdminStatusIconType,
 } from '../types'
 import { cn } from '../utils/cn'
+import { Link } from 'react-router-dom'
 
 type RepairTargetType = 'district' | 'report'
 
@@ -191,7 +192,7 @@ function formatNumber(value: number) {
 
 function panelClass(className?: string) {
   return cn(
-    'rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,40,70,0.06)] sm:p-5',
+    'rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_30px_rgba(15,40,70,0.06)]',
     className,
   )
 }
@@ -205,15 +206,15 @@ function HeaderUser() {
           12
         </span>
       </button>
-      <div className="flex items-center gap-3">
+      <Link to="/mypage" aria-label="마이페이지로 이동" className="flex items-center gap-3 rounded-full px-2 py-1 transition hover:bg-blue-50">
         <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-100 to-slate-200 text-slate-700 shadow-sm" aria-hidden="true">
           <UserRound size={24} />
         </div>
-        <button type="button" className="flex items-center gap-2 text-[14px] font-black text-slate-800">
+        <span className="flex items-center gap-2 text-[14px] font-black text-slate-800">
           홍길동
           <ChevronDown size={18} aria-hidden="true" />
-        </button>
-      </div>
+        </span>
+      </Link>
     </div>
   )
 }
@@ -322,7 +323,7 @@ function KpiCard({ stat }: { stat: (typeof adminKpiStats)[number] }) {
   const deltaClass = stat.id === 'urgent-repair' ? 'text-red-500' : stat.deltaDirection === 'down' ? 'text-emerald-600' : color.text
 
   return (
-    <section className={panelClass('min-h-[146px]')}>
+    <section className={panelClass('min-h-[136px]')}>
       <div className="flex h-full items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -374,7 +375,6 @@ function TrendChart() {
       return `${x},${y}`
     })
     .join(' ')
-  const latest = adminTrendData[adminTrendData.length - 1]
 
   return (
     <section className={panelClass()}>
@@ -388,7 +388,7 @@ function TrendChart() {
         <LegendItem colorClass="bg-purple-600" label="보수 완료율(%)" />
       </div>
       <div className="overflow-hidden rounded-xl bg-white">
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="최근 30일 신고 건수, 보수 완료 건수, 보수 완료율 추이" className="h-[250px] w-full sm:h-[270px]">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="최근 30일 신고 건수, 보수 완료 건수, 보수 완료율 추이" className="h-[190px] w-full sm:h-[205px]">
           {[120, 100, 80, 60, 40, 20, 0].map((tick) => {
             const y = margin.top + ((maxCount - tick) / maxCount) * plotHeight
             return (
@@ -432,11 +432,6 @@ function TrendChart() {
             return <circle key={`${item.date}-rate`} cx={x} cy={y} r="4" fill="#7C3AED" stroke="#FFFFFF" strokeWidth="2" />
           })}
         </svg>
-      </div>
-      <div className="mt-3 grid gap-2 text-[12px] font-bold text-slate-600 sm:grid-cols-3">
-        <p className="rounded-lg bg-blue-50 px-3 py-2 text-blue-700">최근 신고 최고: 06.05 100건</p>
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700">보수 완료 최고: 06.05 72건</p>
-        <p className="rounded-lg bg-purple-50 px-3 py-2 text-purple-700">최근 완료율: {latest.completionRate}%</p>
       </div>
     </section>
   )
@@ -519,7 +514,7 @@ function SeoulRiskMap({ onMockAction }: { onMockAction: (message: string) => voi
         <SectionTitle title="서울특별시 위험 분포" />
         <SelectControl id="admin-map-scope" label="범위" value={scope} options={['전체', '미처리', '긴급']} onChange={setScope} className="h-9 min-w-[108px] px-3 shadow-sm sm:w-auto" />
       </div>
-      <div className="relative h-[252px] overflow-hidden rounded-xl border border-slate-100 bg-slate-100" role="img" aria-label="서울특별시 위험 분포 지도">
+      <div className="relative h-[200px] overflow-hidden rounded-xl border border-slate-100 bg-slate-100" role="img" aria-label="서울특별시 위험 분포 지도">
         <ImageWithFallback
           sources={['/assets/admin/admin-risk-map.webp', '/assets/admin/admin-risk-map.png']}
           alt="서울특별시 위험 분포 지도"
@@ -689,7 +684,7 @@ function MetricDetail({ label, value, valueClassName }: { label: string; value: 
 }
 
 function priorityButtonClass(level: AdminRiskGrade, selectedLevel: AdminRiskGrade) {
-  const base = 'rounded-md px-3 py-1.5 text-[12px] font-black ring-1 ring-inset transition'
+  const base = 'rounded-md px-3 py-1 text-[12px] font-black ring-1 ring-inset transition'
   const activeStyles: Record<AdminRiskGrade, string> = {
     긴급: 'bg-red-600 text-white ring-red-600',
     주의: 'bg-orange-500 text-white ring-orange-500',
@@ -727,14 +722,12 @@ function RepairAssignmentCard({ onAssigned }: { onAssigned: (message: string) =>
           신고 선택
         </label>
       </fieldset>
-      <label htmlFor="repair-district-select" className="mt-4 block text-[13px] font-black text-slate-600">
-        {targetType === 'district' ? '자치구' : '신고'}
-      </label>
       <select
         id="repair-district-select"
+        aria-label={targetType === 'district' ? '자치구 선택' : '신고 선택'}
         value={selectedDistrict}
         onChange={(event) => setSelectedDistrict(event.target.value)}
-        className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-600 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        className="mt-3 h-8 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-600 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
       >
         {assignmentDistrictOptions.map((option) => (
           <option key={option} value={option}>
@@ -742,22 +735,22 @@ function RepairAssignmentCard({ onAssigned }: { onAssigned: (message: string) =>
           </option>
         ))}
       </select>
-      <p className="mt-5 text-[13px] font-black text-slate-600">우선순위 등급</p>
-      <div className="mt-3 flex flex-wrap gap-3">
+      <p className="mt-2 text-[13px] font-black text-slate-600">우선순위 등급</p>
+      <div className="mt-2 flex flex-wrap gap-3">
         {priorityLevels.map((level) => (
           <button key={level} type="button" aria-pressed={selectedPriority === level} onClick={() => setSelectedPriority(level)} className={priorityButtonClass(level, selectedPriority)}>
             {level}
           </button>
         ))}
       </div>
-      <label htmlFor="repair-department-select" className="mt-5 block text-[13px] font-black text-slate-600">
+      <label htmlFor="repair-department-select" className="mt-2 block text-[13px] font-black text-slate-600">
         담당 기관
       </label>
       <select
         id="repair-department-select"
         value={department}
         onChange={(event) => setDepartment(event.target.value)}
-        className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-600 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-600 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
       >
         {departmentOptions.map((option) => (
           <option key={option} value={option}>
@@ -765,22 +758,21 @@ function RepairAssignmentCard({ onAssigned }: { onAssigned: (message: string) =>
           </option>
         ))}
       </select>
-      <label htmlFor="repair-memo" className="mt-5 block text-[13px] font-black text-slate-600">
+      <label htmlFor="repair-memo" className="mt-2 block text-[13px] font-black text-slate-600">
         메모
       </label>
-      <textarea
+      <input
         id="repair-memo"
         value={memo}
         onChange={(event) => setMemo(event.target.value)}
         maxLength={100}
         placeholder="메모를 입력하세요 (최대 100자)"
-        rows={3}
-        className="mt-2 w-full resize-none rounded-lg border border-slate-200 bg-white px-4 py-3 text-[13px] font-semibold outline-none placeholder:text-slate-400 transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        className="mt-1 h-8 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold outline-none placeholder:text-slate-400 transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
       />
       <button
         type="button"
         onClick={() => onAssigned('우선 보수 지정 기능은 데모 화면입니다.')}
-        className="mt-5 h-11 w-full rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[15px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:from-blue-700 hover:to-blue-600"
+        className="mt-2 h-9 w-full rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[14px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:from-blue-700 hover:to-blue-600"
       >
         우선 보수 지정
       </button>
@@ -825,7 +817,7 @@ function StatusSummary({ onMockAction }: { onMockAction: (message: string) => vo
           const color = colorStyles[item.colorType]
 
           return (
-            <div key={item.id} className="flex items-center justify-between gap-4 border-b border-slate-100 py-4 last:border-b-0">
+            <div key={item.id} className="flex items-center justify-between gap-4 border-b border-slate-100 py-2.5 last:border-b-0">
               <div className="flex items-center gap-3">
                 <span className={cn('flex h-9 w-9 items-center justify-center rounded-lg', color.iconBg)}>
                   {statusIcon(item.iconType)}

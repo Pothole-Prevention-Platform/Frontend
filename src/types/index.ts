@@ -416,3 +416,73 @@ export interface AdminStatusSummaryItem {
   colorType: AdminColorType
   iconType: AdminStatusIconType
 }
+
+export type MyPageStatIconType = 'clipboard' | 'mapPin' | 'wallet'
+
+export type MyPageInterestType = 'region' | 'route'
+
+export type MyPageNotificationIconType = 'alert' | 'bell' | 'wallet' | 'mail'
+
+export type MyPageActivityIconType = 'report' | 'claim' | 'region'
+
+export type MyPageActivityStatusType = 'accepted' | 'processing' | 'completed'
+
+export type MyPageClaimStatusType = 'accepted' | 'processing' | 'completed'
+
+export interface MyPageProfile {
+  name: string
+  userType: string
+  email: string
+  phone: string
+  joinedAt: string
+  avatarUrl: string
+  fallbackAvatarUrl: string
+}
+
+export interface MyPageStat {
+  id: string
+  title: string
+  value: string
+  iconType: MyPageStatIconType
+  sparklineValues: number[]
+}
+
+export interface MyPageBasicInfoRow {
+  label: string
+  value: string
+}
+
+export interface MyPageInterestItem {
+  id: string
+  type: MyPageInterestType
+  title: string
+  badgeLabel: string
+  imageUrl: string
+  fallbackImageUrl: string
+}
+
+export interface MyPageNotificationSetting {
+  id: string
+  title: string
+  description: string
+  enabled: boolean
+  iconType: MyPageNotificationIconType
+}
+
+export interface MyPageActivity {
+  id: string
+  type: string
+  content: string
+  date: string
+  status: string
+  statusType: MyPageActivityStatusType
+  iconType: MyPageActivityIconType
+}
+
+export interface MyPageCompensationClaim {
+  id: string
+  location: string
+  date: string
+  status: string
+  statusType: MyPageClaimStatusType
+}

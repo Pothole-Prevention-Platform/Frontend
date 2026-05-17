@@ -9,6 +9,7 @@ import { ComponentPreviewPage } from '../pages/ComponentPreviewPage'
 import { InitialSetupPage } from '../pages/InitialSetupPage'
 import { LoadingPage } from '../pages/LoadingPage'
 import { LoginPage } from '../pages/LoginPage'
+import { MyPage } from '../pages/MyPage'
 import { RiskMapPage } from '../pages/RiskMapPage'
 import { SignupPage } from '../pages/SignupPage'
 
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: '/agency', element: <AgencyCompensationPage /> },
       { path: '/alerts', element: <AlertsPage /> },
       { path: '/admin', element: <AdminDashboardPage /> },
+      { path: '/mypage', element: <MyPage /> },
       { path: '/dev/components', element: <ComponentPreviewPage /> },
     ],
   },

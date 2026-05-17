@@ -30,6 +30,13 @@ import type {
   RoutePreview,
   VehicleInfo,
   WeatherAlert,
+  MyPageActivity,
+  MyPageBasicInfoRow,
+  MyPageCompensationClaim,
+  MyPageInterestItem,
+  MyPageNotificationSetting,
+  MyPageProfile,
+  MyPageStat,
 } from '../types'
 
 export const citizenReportMock: CitizenReportMock = {
@@ -563,6 +570,178 @@ export const compensationDrafts: CompensationDraft[] = [
     occurredAt: '2026-05-17 08:35',
     attachedEvidenceCount: 4,
     draftStatus: '청구서 초안 작성 가능',
+  },
+]
+
+export const myPageProfile: MyPageProfile = {
+  name: '홍길동',
+  userType: '일반 운전자',
+  email: 'honggildong@email.com',
+  phone: '010-1234-5678',
+  joinedAt: '2024. 03. 15',
+  avatarUrl: '/assets/mypage/profile-avatar.webp',
+  fallbackAvatarUrl: '/assets/mypage/profile-avatar.png',
+}
+
+export const myPageStats: MyPageStat[] = [
+  {
+    id: 'recent-reports',
+    title: '최근 신고',
+    value: '12건',
+    iconType: 'clipboard',
+    sparklineValues: [8, 11, 7, 9, 8, 12, 15, 10, 8, 10, 9, 13],
+  },
+  {
+    id: 'interest-regions',
+    title: '관심 지역',
+    value: '3개',
+    iconType: 'mapPin',
+    sparklineValues: [1, 2, 1, 1, 2, 1, 2, 3, 2, 1, 1, 2],
+  },
+  {
+    id: 'compensation-progress',
+    title: '보상 진행',
+    value: '2건',
+    iconType: 'wallet',
+    sparklineValues: [1, 2, 1, 1, 2, 1, 1, 3, 1, 2, 2, 3],
+  },
+]
+
+export const myPageBasicInfo: MyPageBasicInfoRow[] = [
+  { label: '이름', value: myPageProfile.name },
+  { label: '이메일', value: myPageProfile.email },
+  { label: '휴대폰 번호', value: myPageProfile.phone },
+  { label: '사용자 유형', value: myPageProfile.userType },
+  { label: '가입일', value: myPageProfile.joinedAt },
+]
+
+export const myPageInterestItems: MyPageInterestItem[] = [
+  {
+    id: 'interest-gangnam',
+    type: 'region',
+    title: '서울특별시 강남구',
+    badgeLabel: '관심 지역',
+    imageUrl: '/assets/mypage/mypage-region-gangnam.webp',
+    fallbackImageUrl: '/assets/mypage/mypage-region-gangnam.png',
+  },
+  {
+    id: 'interest-mapo',
+    type: 'region',
+    title: '마포구',
+    badgeLabel: '관심 지역',
+    imageUrl: '/assets/mypage/mypage-region-mapo.webp',
+    fallbackImageUrl: '/assets/mypage/mypage-region-mapo.png',
+  },
+  {
+    id: 'route-gangnam-seocho',
+    type: 'route',
+    title: '강남구-서초구 경로',
+    badgeLabel: '관심 경로',
+    imageUrl: '/assets/mypage/mypage-route-gangnam-seocho.webp',
+    fallbackImageUrl: '/assets/mypage/mypage-route-gangnam-seocho.png',
+  },
+]
+
+export const myPageNotificationSettings: MyPageNotificationSetting[] = [
+  {
+    id: 'risk-zone-alert',
+    title: '위험 구간 접근 알림',
+    description: '설정한 관심 지역의 위험 구간 접근 시 알림을 받습니다.',
+    enabled: true,
+    iconType: 'alert',
+  },
+  {
+    id: 'new-report-alert',
+    title: '신규 신고 알림',
+    description: '관심 지역의 신규 신고 발생 시 알림을 받습니다.',
+    enabled: true,
+    iconType: 'bell',
+  },
+  {
+    id: 'compensation-alert',
+    title: '보상 진행 알림',
+    description: '보상 청구 진행 상황을 알림으로 받습니다.',
+    enabled: true,
+    iconType: 'wallet',
+  },
+  {
+    id: 'email-news',
+    title: '이메일 수신',
+    description: '서비스 소식 및 주요 정보를 이메일로 받습니다.',
+    enabled: false,
+    iconType: 'mail',
+  },
+]
+
+export const myPageRecentActivities: MyPageActivity[] = [
+  {
+    id: 'activity-report-gangnam',
+    type: '시민 신고',
+    content: '서울 강남구 역삼로 123 인근 포트홀 신고',
+    date: '2024.05.18 14:32',
+    status: '접수 완료',
+    statusType: 'accepted',
+    iconType: 'report',
+  },
+  {
+    id: 'activity-claim-seocho',
+    type: '보상 청구',
+    content: '서울 서초구 반포대로 45 차량 파손',
+    date: '2024.05.15 09:21',
+    status: '처리 중',
+    statusType: 'processing',
+    iconType: 'claim',
+  },
+  {
+    id: 'activity-report-mapo',
+    type: '시민 신고',
+    content: '마포구 월드컵로 200 인근 포트홀 신고',
+    date: '2024.05.12 11:08',
+    status: '완료',
+    statusType: 'completed',
+    iconType: 'report',
+  },
+  {
+    id: 'activity-region-mapo',
+    type: '관심 지역 추가',
+    content: '서울특별시 마포구',
+    date: '2024.05.10 16:45',
+    status: '완료',
+    statusType: 'completed',
+    iconType: 'region',
+  },
+  {
+    id: 'activity-claim-gangnam',
+    type: '보상 청구',
+    content: '강남구 테헤란로 101 차량 타이어 손상',
+    date: '2024.05.07 13:37',
+    status: '완료',
+    statusType: 'completed',
+    iconType: 'claim',
+  },
+]
+
+export const myPageCompensationClaims: MyPageCompensationClaim[] = [
+  {
+    id: 'claim-seocho-banpo',
+    location: '서울 서초구 반포대로 45',
+    date: '2024.05.15 청구',
+    status: '처리 중',
+    statusType: 'processing',
+  },
+  {
+    id: 'claim-gangnam-teheran',
+    location: '강남구 테헤란로 101',
+    date: '2024.05.07 청구',
+    status: '완료',
+    statusType: 'completed',
+  },
+  {
+    id: 'claim-mapo-worldcup',
+    location: '마포구 월드컵로 200',
+    date: '2024.04.28 청구',
+    status: '접수 완료',
+    statusType: 'accepted',
   },
 ]
 

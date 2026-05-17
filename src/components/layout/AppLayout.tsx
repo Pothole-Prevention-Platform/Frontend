@@ -1,16 +1,17 @@
 import { type ElementType, type ReactNode, useState } from 'react'
 import {
   Bell,
-  Building2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ClipboardList,
-  FileText,
+  Landmark,
   MapPin,
+  PencilLine,
   Settings,
   ShieldCheck,
+  UserRound,
 } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '../../utils/cn'
 
 type NavItem = {
@@ -28,12 +29,20 @@ type AssetImageProps = {
 
 const navItems: NavItem[] = [
   { to: '/risk-map', label: '위험 예측지도', icon: MapPin },
-  { to: '/report', label: '시민 신고', icon: ClipboardList },
-  { to: '/report/ai-review', label: 'AI 사진 판별', icon: ShieldCheck },
-  { to: '/agency', label: '관할기관 안내', icon: Building2 },
-  { to: '/agency', label: '보상 청구', icon: FileText },
+  { to: '/report', label: '시민 신고', icon: PencilLine },
+  { to: '/report/ai-review', label: 'AI 판별', icon: ShieldCheck },
+  { to: '/agency', label: '관할기관 안내 · 보상 청구', icon: Landmark },
   { to: '/alerts', label: '실시간 알림', icon: Bell },
   { to: '/admin', label: '관리자 대시보드', icon: Settings },
+  { to: '/mypage', label: '마이페이지', icon: UserRound },
+]
+
+const bottomNavItems: NavItem[] = [
+  { to: '/risk-map', label: '위험 예측지도', icon: MapPin },
+  { to: '/report', label: '시민 신고', icon: PencilLine },
+  { to: '/report/ai-review', label: 'AI 판별', icon: ShieldCheck },
+  { to: '/alerts', label: '실시간 알림', icon: Bell },
+  { to: '/mypage', label: '마이페이지', icon: UserRound },
 ]
 
 function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
@@ -58,7 +67,7 @@ function BrandLogo({ compact = false }: { compact?: boolean }) {
   return (
     <NavLink to="/risk-map" className="flex min-w-0 items-center gap-3" aria-label="포트홀 가드 AI 위험 예측지도로 이동">
       <AssetImage
-        sources={['/assets/loading/pothole-guard-logo-cropped.png', '/assets/loading/pothole-guard-logo.png']}
+        sources={['/assets/loading/pothole-guard-logo.png', '/assets/loading/pothole-guard-logo-cropped.png']}
         alt="포트홀 가드 AI"
         className={cn('h-auto object-contain', compact ? 'w-[160px]' : 'w-[208px]')}
         fallback={
@@ -92,7 +101,7 @@ function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavIt
             ? 'min-w-0 flex-col justify-center gap-1 px-1 py-2 text-[11px]'
             : compact
               ? 'gap-2 px-3 py-2 text-[13px]'
-              : 'gap-4 px-4 py-3 text-[15px]',
+              : 'gap-3 px-3 py-3 text-[14px]',
           isActive
             ? 'bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-white shadow-[0_14px_28px_rgba(0,95,220,0.25)]'
             : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700',
@@ -107,7 +116,7 @@ function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavIt
             fill={item.to === '/risk-map' && isActive ? 'currentColor' : 'none'}
             aria-hidden="true"
           />
-          <span className={cn('truncate', mobile && 'text-center leading-tight')}>{item.label}</span>
+          <span className={cn('min-w-0 break-keep leading-tight', !compact && !mobile && 'whitespace-nowrap', mobile && 'text-center')}>{item.label}</span>
         </>
       )}
     </NavLink>
@@ -147,18 +156,58 @@ function SidebarFooter() {
   return (
     <div className="rounded-2xl bg-white p-4 shadow-[0_16px_40px_rgba(15,40,70,0.05)]">
       <AssetImage
-        sources={['/assets/loading/molit-logo-cropped.png', '/assets/loading/molit-logo.png']}
+        sources={['/assets/loading/molit-logo.png', '/assets/loading/molit-logo-cropped.png']}
         alt="국토교통부"
         className="h-auto w-[128px] object-contain"
         fallback={<span className="text-[17px] font-black text-slate-700">국토교통부</span>}
       />
       <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-500">
-        © 2024 Ministry of Land,
-        <br />
-        Infrastructure and Transport.
+        © 2024 국토교통부
         <br />
         All rights reserved.
       </p>
+    </div>
+  )
+}
+
+function UserAvatar() {
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-100 text-slate-700 shadow-sm">
+      <AssetImage
+        sources={['/assets/mypage/profile-avatar.webp', '/assets/mypage/profile-avatar.png']}
+        alt="사용자 프로필 이미지"
+        className="h-full w-full object-cover"
+        fallback={<UserRound size={26} aria-hidden="true" />}
+      />
+    </div>
+  )
+}
+
+function AppTopActions() {
+  return (
+    <div className="absolute right-4 top-5 z-20 hidden items-center gap-5 sm:right-6 lg:flex xl:right-7 xl:top-6">
+      <button
+        type="button"
+        aria-label="읽지 않은 알림 3건"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#07182F] transition hover:bg-blue-50"
+      >
+        <Bell size={24} aria-hidden="true" />
+        <span className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">
+          3
+        </span>
+      </button>
+
+      <Link
+        to="/mypage"
+        aria-label="마이페이지로 이동"
+        className="flex items-center gap-3 rounded-full px-2 py-1 transition hover:bg-blue-50 focus-visible:outline-blue-400"
+      >
+        <UserAvatar />
+        <span className="flex items-center gap-2 text-[14px] font-black tracking-[-0.04em] text-slate-800">
+          홍길동
+          <ChevronDown size={18} aria-hidden="true" />
+        </span>
+      </Link>
     </div>
   )
 }
@@ -193,10 +242,17 @@ function MobileHeader() {
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur xl:hidden">
       <div className="flex items-center justify-between gap-3">
         <BrandLogo compact />
-        <span className="rounded-full bg-blue-50 px-3 py-1 text-[12px] font-black text-blue-700">Mock Demo</span>
+        <Link
+          to="/mypage"
+          aria-label="마이페이지로 이동"
+          className="flex shrink-0 items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-[12px] font-black text-blue-700"
+        >
+          <UserRound size={15} aria-hidden="true" />
+          홍길동
+        </Link>
       </div>
-      <nav className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-7" aria-label="빠른 메뉴">
-        {navItems.slice(0, 7).map((item, index) => (
+      <nav className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8" aria-label="빠른 메뉴">
+        {navItems.map((item, index) => (
           <SidebarNavItem key={`${item.to}-${index}-compact`} item={item} compact />
         ))}
       </nav>
@@ -207,7 +263,7 @@ function MobileHeader() {
 function MobileBottomNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white px-2 py-2 shadow-[0_-10px_28px_rgba(15,40,70,0.08)] lg:hidden" aria-label="하단 주요 메뉴">
-      {navItems.slice(0, 5).map((item, index) => (
+      {bottomNavItems.map((item, index) => (
         <SidebarNavItem key={`${item.to}-${index}-mobile`} item={item} mobile />
       ))}
     </nav>
@@ -215,12 +271,16 @@ function MobileBottomNav() {
 }
 
 export function AppLayout() {
+  const location = useLocation()
+  const hasPageLevelUserArea = location.pathname === '/admin'
+
   return (
     <div className="min-h-svh overflow-x-hidden bg-[#F8FBFF] text-slate-900">
       <DesktopSidebar />
       <MobileHeader />
-      <main className="min-w-0 px-4 py-5 pb-24 sm:px-6 lg:pb-8 xl:ml-[268px] xl:px-7 xl:py-6">
-        <div className="w-full max-w-[1210px]">
+      <main className="relative min-w-0 px-4 py-5 pb-24 sm:px-6 lg:pb-8 xl:ml-[268px] xl:px-7 xl:py-6">
+        {!hasPageLevelUserArea && <AppTopActions />}
+        <div className="mx-auto w-full max-w-[1600px]">
           <Outlet />
         </div>
       </main>
