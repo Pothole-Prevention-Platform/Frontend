@@ -5,14 +5,12 @@ import {
   Building2,
   Check,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   CircleHelp,
   ClipboardList,
   FileText,
   Landmark,
   LayoutDashboard,
-  Lock,
   MapPin,
   Plus,
   Route,
@@ -109,43 +107,6 @@ function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
   )
 }
 
-function BrowserChrome() {
-  return (
-    <div className="hidden h-[90px] border-b border-slate-200 bg-white shadow-sm md:block">
-      <div className="flex h-[46px] items-center gap-4 bg-slate-100 px-5">
-        <div className="flex gap-2" aria-hidden="true">
-          <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-          <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
-          <span className="h-3 w-3 rounded-full bg-[#28c840]" />
-        </div>
-        <div className="flex h-8 w-[210px] items-center gap-2 rounded-t-xl bg-white px-3 shadow-sm">
-          <span className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-50 text-blue-700">
-            <ShieldCheck size={15} strokeWidth={2.4} aria-hidden="true" />
-          </span>
-          <span className="text-xs font-bold text-slate-700">포트홀 가드 AI</span>
-          <span className="ml-auto text-slate-400" aria-hidden="true">
-            x
-          </span>
-        </div>
-        <button type="button" className="text-xl text-slate-500" aria-label="새 탭 열기">
-          +
-        </button>
-      </div>
-      <div className="flex h-[44px] items-center gap-5 px-5">
-        <ChevronLeft size={20} className="text-slate-500" aria-hidden="true" />
-        <ChevronRight size={20} className="text-slate-400" aria-hidden="true" />
-        <div className="flex h-8 flex-1 items-center rounded-full bg-slate-100 px-4">
-          <Lock size={14} className="mr-2 text-slate-500" aria-hidden="true" />
-          <span className="truncate text-[13px] font-medium text-slate-600">https://pothole-guard.ai/setup</span>
-        </div>
-        <span className="text-lg text-slate-500" aria-hidden="true">
-          ☆
-        </span>
-      </div>
-    </div>
-  )
-}
-
 function BrandLogo({ compact = false }: { compact?: boolean }) {
   return (
     <AssetImage
@@ -177,7 +138,7 @@ function MinistryLogo() {
 
 function SetupSidebar() {
   return (
-    <aside className="hidden min-h-[calc(100svh-90px)] w-[250px] shrink-0 flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-[8px_0_30px_rgba(15,40,70,0.04)] xl:flex">
+    <aside className="hidden min-h-svh w-[250px] shrink-0 flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-[8px_0_30px_rgba(15,40,70,0.04)] xl:flex">
       <BrandLogo />
       <nav className="mt-9 space-y-2" aria-label="서비스 메뉴">
         {navItems.map(({ label, icon: Icon }) => (
@@ -233,7 +194,7 @@ function SetupSidebar() {
 
 function MobileHeader() {
   return (
-    <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden">
+    <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 xl:hidden">
       <BrandLogo compact />
     </header>
   )
@@ -268,9 +229,9 @@ function TopUserBar({ compact = false }: { compact?: boolean }) {
 
 function SetupProgress() {
   return (
-    <ol className="relative mx-auto mt-4 grid w-full max-w-[940px] grid-cols-4 gap-1 sm:gap-2">
-      <div className="absolute left-[12.5%] right-[12.5%] top-4 h-px bg-slate-200" aria-hidden="true" />
-      <div className="absolute left-[12.5%] top-4 h-[2px] w-[25%] bg-blue-600" aria-hidden="true" />
+    <ol className="relative mx-auto mt-4 grid w-full max-w-[940px] grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4 sm:gap-2">
+      <div className="absolute left-[12.5%] right-[12.5%] top-4 hidden h-px bg-slate-200 sm:block" aria-hidden="true" />
+      <div className="absolute left-[12.5%] top-4 hidden h-[2px] w-[25%] bg-blue-600 sm:block" aria-hidden="true" />
       {setupSteps.map((label, index) => {
         const active = index === 0
 
@@ -298,7 +259,7 @@ function SetupProgress() {
 
 function SectionCard({ number, title, description, children }: { number: number; title: string; description: string; children: ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_12px_34px_rgba(15,40,70,0.06)] sm:px-5">
+    <section className="w-full max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_12px_34px_rgba(15,40,70,0.06)] sm:px-5">
       <div className="mb-3">
         <div className="flex items-center gap-2">
           <h2 className="text-[18px] font-black text-[#07182F]">
@@ -320,7 +281,7 @@ function UserTypeCard({ option, selected, onSelect }: { option: UserTypeOption; 
       aria-pressed={selected}
       onClick={onSelect}
       className={cn(
-        'relative grid min-h-[96px] min-w-0 grid-cols-[72px_1fr] items-center gap-3 rounded-xl border bg-white px-4 text-left transition focus-visible:outline-blue-400 sm:grid-cols-[84px_1fr] sm:px-6',
+        'relative grid min-h-[96px] w-full max-w-full min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-xl border bg-white px-3 text-left transition focus-visible:outline-blue-400 sm:grid-cols-[84px_minmax(0,1fr)] sm:gap-3 sm:px-6',
         selected
           ? 'border-blue-600 bg-blue-50/20 shadow-[0_10px_24px_rgba(0,96,210,0.1)]'
           : 'border-slate-200 hover:border-blue-200 hover:bg-blue-50/30',
@@ -328,7 +289,7 @@ function UserTypeCard({ option, selected, onSelect }: { option: UserTypeOption; 
     >
       <span
         className={cn(
-          'absolute left-4 top-4 flex h-[18px] w-[18px] items-center justify-center rounded-full border',
+          'absolute left-3 top-4 flex h-[18px] w-[18px] items-center justify-center rounded-full border sm:left-4',
           selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white',
         )}
       >
@@ -337,9 +298,9 @@ function UserTypeCard({ option, selected, onSelect }: { option: UserTypeOption; 
       <AssetImage
         sources={[`${option.imageBase}.webp`, `${option.imageBase}.png`]}
         alt={option.alt}
-        className="ml-5 h-[56px] w-[56px] shrink-0 rounded-full bg-blue-50 object-contain text-blue-700 sm:ml-7"
+        className="ml-2 h-[56px] w-[56px] shrink-0 rounded-full bg-blue-50 object-contain text-blue-700 sm:ml-7"
         fallback={
-          <span className="ml-5 flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700 sm:ml-7">
+          <span className="ml-2 flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700 sm:ml-7">
             {option.fallback}
           </span>
         }
@@ -427,15 +388,14 @@ export function InitialSetupPage() {
 
   return (
     <main className="min-h-svh overflow-x-hidden bg-white text-slate-900">
-      <BrowserChrome />
       <MobileHeader />
       <div className="flex w-full min-w-0 overflow-x-hidden">
         <SetupSidebar />
-        <section className="relative min-h-[calc(100svh-90px)] min-w-0 flex-1 basis-0 bg-gradient-to-br from-white via-[#FBFDFF] to-[#F4F8FF] px-4 pb-5 pt-5 sm:px-6 xl:px-10">
+        <section className="relative min-h-svh w-full min-w-0 flex-1 basis-0 overflow-x-hidden bg-gradient-to-br from-white via-[#FBFDFF] to-[#F4F8FF] px-4 pb-5 pt-5 sm:px-6 xl:px-10">
           <div className="absolute right-9 top-6">
             <TopUserBar />
           </div>
-          <div className="w-full min-w-0 max-w-full xl:max-w-[1132px]">
+          <div className="mx-auto w-full min-w-0 max-w-[1440px]">
             <div className="pr-0 md:pr-44">
               <h1 className="text-[30px] font-black text-[#07182F] sm:text-[32px]">초기 설정</h1>
               <p className="mt-2 text-[14px] font-semibold text-slate-500">서비스를 맞춤 설정하고 더 안전한 도로 환경을 만들어보세요.</p>
@@ -579,14 +539,14 @@ export function InitialSetupPage() {
               <button
                 type="button"
                 onClick={goToRiskMap}
-                className="h-[42px] rounded-lg border border-slate-200 bg-white px-8 text-[14px] font-black text-slate-600 shadow-sm transition hover:bg-slate-50"
+                className="h-[42px] w-full rounded-lg border border-slate-200 bg-white px-8 text-[14px] font-black text-slate-600 shadow-sm transition hover:bg-slate-50 sm:w-auto"
               >
                 건너뛰기
               </button>
               <button
                 type="button"
                 onClick={goToRiskMap}
-                className="flex h-[44px] items-center justify-center gap-3 rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] px-14 text-[15px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5"
+                className="flex h-[44px] w-full items-center justify-center gap-3 rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] px-14 text-[15px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 sm:w-auto"
               >
                 설정 완료
                 <ChevronRight size={18} aria-hidden="true" />
