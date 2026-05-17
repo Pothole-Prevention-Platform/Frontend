@@ -167,7 +167,7 @@ function SecurityImage() {
 
 function SignupIntroPanel() {
   return (
-    <aside className="mx-auto flex w-[calc(100vw-40px)] min-w-0 max-w-[430px] flex-col pt-6 pb-4 sm:w-full lg:mx-0 lg:max-w-[460px] lg:pt-[34px] lg:pb-0">
+    <aside className="signup-intro-panel mx-auto flex min-w-0 max-w-[430px] flex-col pt-6 pb-4 lg:mx-0 lg:max-w-[460px] lg:pt-[34px] lg:pb-0">
       <div className="text-center">
         <h1 className="text-[34px] font-black text-[#07182F] sm:text-[40px]">회원가입</h1>
         <p className="mt-4 break-all text-sm font-bold text-slate-500 sm:break-words sm:text-base">

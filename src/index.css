@@ -52,6 +52,22 @@ textarea:focus-visible {
   min-height: 100svh;
 }
 
+.signup-intro-panel {
+  width: min(calc(100vw - 40px), 430px);
+}
+
+@media (min-width: 640px) {
+  .signup-intro-panel {
+    width: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .signup-intro-panel {
+    width: 460px;
+  }
+}
+
 .map-grid {
   background-image:
     linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
