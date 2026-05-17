@@ -341,3 +341,78 @@ export interface AdminReportRow {
   status: ReportStatus
   priorityScore: number
 }
+
+export type AdminColorType = 'blue' | 'red' | 'orange' | 'green' | 'yellow' | 'gray' | 'purple' | 'teal'
+
+export type AdminDeltaDirection = 'up' | 'down'
+
+export type AdminKpiIconType = 'filePlus' | 'alertTriangle' | 'clock' | 'cpu'
+
+export type AdminRiskGrade = '긴급' | '주의' | '관심'
+
+export type AdminMapRiskLevel = 'very-high' | 'high' | 'medium' | 'low' | 'very-low'
+
+export type AdminStatusIconType = 'fileText' | 'clipboard' | 'wrench' | 'check' | 'x'
+
+export type AdminPriorityTab = 'risk' | 'reports' | 'unresolved'
+
+export interface AdminFilters {
+  district: string
+  periodLabel: string
+  status: string
+}
+
+export interface AdminKpiStat {
+  id: string
+  title: string
+  value: string
+  unit: string
+  description: string
+  deltaLabel: string
+  deltaDirection: AdminDeltaDirection
+  iconType: AdminKpiIconType
+  colorType: AdminColorType
+}
+
+export interface AdminTrendDatum {
+  date: string
+  reportCount: number
+  repairedCount: number
+  completionRate: number
+}
+
+export interface AdminRiskDistributionItem {
+  id: string
+  label: string
+  count: number
+  percent: number
+  colorType: AdminColorType
+}
+
+export interface AdminMapRiskPoint {
+  id: string
+  district: string
+  value: number
+  level: AdminMapRiskLevel
+  x: number
+  y: number
+}
+
+export interface AdminPriorityArea {
+  rank: number
+  district: string
+  riskGrade: AdminRiskGrade
+  reportCount: number
+  unresolvedCount: number
+  maxUnresolvedDays: number
+  deltaLabel: string
+  deltaDirection: AdminDeltaDirection
+}
+
+export interface AdminStatusSummaryItem {
+  id: string
+  label: string
+  count: number
+  colorType: AdminColorType
+  iconType: AdminStatusIconType
+}

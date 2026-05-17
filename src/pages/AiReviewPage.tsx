@@ -120,7 +120,7 @@ function UploadedPhotoPanel({ onNotice }: { onNotice: (message: string) => void 
         <AnalysisDetectionOverlay />
 
         <div className="absolute inset-x-3 top-3 flex flex-col gap-2 sm:inset-x-5 sm:top-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="w-fit rounded-lg bg-black/55 px-3 py-2 text-[12px] font-bold text-white backdrop-blur sm:px-4 sm:text-[13px]">
+          <div className="max-w-full truncate rounded-lg bg-black/55 px-3 py-2 text-[12px] font-bold text-white backdrop-blur sm:w-fit sm:px-4 sm:text-[13px]">
             촬영 일시&nbsp;&nbsp; {aiReviewResult.capturedAt}
           </div>
           <button
@@ -134,7 +134,7 @@ function UploadedPhotoPanel({ onNotice }: { onNotice: (message: string) => void 
         </div>
 
         <div className="absolute inset-x-3 bottom-3 flex flex-col gap-2 sm:inset-x-5 sm:bottom-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="w-fit rounded-lg bg-black/55 px-3 py-2 text-[12px] font-bold text-white backdrop-blur sm:px-4 sm:text-[13px]">
+          <div className="max-w-full truncate rounded-lg bg-black/55 px-3 py-2 text-[12px] font-bold text-white backdrop-blur sm:w-fit sm:px-4 sm:text-[13px]">
             위치&nbsp;&nbsp; {aiReviewResult.location}
           </div>
           <button

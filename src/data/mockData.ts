@@ -632,6 +632,150 @@ export const adminReportRows: AdminReportRow[] = [
   },
 ]
 
+export const adminFilters = {
+  district: '전체',
+  periodLabel: '최근 30일 (2024.05.07 ~ 2024.06.05)',
+  status: '전체',
+} satisfies import('../types').AdminFilters
+
+export const adminKpiStats = [
+  {
+    id: 'total-reports',
+    title: '총 신고 건수',
+    value: '1,248',
+    unit: '건',
+    description: '누적 12,842 건',
+    deltaLabel: '18%',
+    deltaDirection: 'up',
+    iconType: 'filePlus',
+    colorType: 'blue',
+  },
+  {
+    id: 'urgent-repair',
+    title: '긴급 보수 필요',
+    value: '128',
+    unit: '건',
+    description: '전체의 10.3%',
+    deltaLabel: '5%',
+    deltaDirection: 'up',
+    iconType: 'alertTriangle',
+    colorType: 'red',
+  },
+  {
+    id: 'average-processing-time',
+    title: '평균 처리 시간',
+    value: '18.6',
+    unit: '시간',
+    description: '목표 24시간 이내',
+    deltaLabel: '8%',
+    deltaDirection: 'down',
+    iconType: 'clock',
+    colorType: 'orange',
+  },
+  {
+    id: 'completion-rate',
+    title: '보수 완료율',
+    value: '91.3',
+    unit: '%',
+    description: '목표 90% 이상',
+    deltaLabel: '6.2%p',
+    deltaDirection: 'up',
+    iconType: 'cpu',
+    colorType: 'teal',
+  },
+] satisfies import('../types').AdminKpiStat[]
+
+export const adminTrendData = [
+  { date: '05.07', reportCount: 70, repairedCount: 42, completionRate: 88 },
+  { date: '05.10', reportCount: 69, repairedCount: 58, completionRate: 96 },
+  { date: '05.13', reportCount: 70, repairedCount: 39, completionRate: 82 },
+  { date: '05.16', reportCount: 75, repairedCount: 57, completionRate: 87 },
+  { date: '05.19', reportCount: 88, repairedCount: 67, completionRate: 80 },
+  { date: '05.22', reportCount: 94, repairedCount: 52, completionRate: 90 },
+  { date: '05.25', reportCount: 93, repairedCount: 56, completionRate: 88 },
+  { date: '05.28', reportCount: 74, repairedCount: 43, completionRate: 92 },
+  { date: '05.31', reportCount: 90, repairedCount: 70, completionRate: 86 },
+  { date: '06.03', reportCount: 82, repairedCount: 66, completionRate: 96 },
+  { date: '06.05', reportCount: 100, repairedCount: 72, completionRate: 98 },
+] satisfies import('../types').AdminTrendDatum[]
+
+export const adminRiskDistribution = [
+  { id: 'urgent', label: '긴급', count: 128, percent: 10.3, colorType: 'red' },
+  { id: 'caution', label: '주의', count: 312, percent: 25.0, colorType: 'orange' },
+  { id: 'attention', label: '관심', count: 468, percent: 37.5, colorType: 'yellow' },
+  { id: 'completed', label: '양호/완료', count: 284, percent: 22.8, colorType: 'green' },
+  { id: 'etc', label: '기타', count: 56, percent: 4.4, colorType: 'gray' },
+] satisfies import('../types').AdminRiskDistributionItem[]
+
+export const adminMapRiskPoints = [
+  { id: 'dobong', district: '도봉구', value: 78, level: 'very-high', x: 58, y: 14 },
+  { id: 'mapo', district: '마포구', value: 56, level: 'very-high', x: 14, y: 47 },
+  { id: 'yongsan', district: '용산구', value: 121, level: 'high', x: 51, y: 53 },
+  { id: 'seocho', district: '서초구', value: 93, level: 'very-high', x: 66, y: 76 },
+  { id: 'songpa', district: '송파구', value: 64, level: 'high', x: 87, y: 70 },
+] satisfies import('../types').AdminMapRiskPoint[]
+
+export const adminPriorityAreas = [
+  {
+    rank: 1,
+    district: '강남구',
+    riskGrade: '긴급',
+    reportCount: 152,
+    unresolvedCount: 28,
+    maxUnresolvedDays: 7,
+    deltaLabel: '23%',
+    deltaDirection: 'up',
+  },
+  {
+    rank: 2,
+    district: '강북구',
+    riskGrade: '긴급',
+    reportCount: 124,
+    unresolvedCount: 21,
+    maxUnresolvedDays: 6,
+    deltaLabel: '15%',
+    deltaDirection: 'up',
+  },
+  {
+    rank: 3,
+    district: '영등포구',
+    riskGrade: '주의',
+    reportCount: 98,
+    unresolvedCount: 17,
+    maxUnresolvedDays: 5,
+    deltaLabel: '8%',
+    deltaDirection: 'up',
+  },
+  {
+    rank: 4,
+    district: '관악구',
+    riskGrade: '주의',
+    reportCount: 87,
+    unresolvedCount: 15,
+    maxUnresolvedDays: 4,
+    deltaLabel: '5%',
+    deltaDirection: 'down',
+  },
+  {
+    rank: 5,
+    district: '노원구',
+    riskGrade: '관심',
+    reportCount: 76,
+    unresolvedCount: 11,
+    maxUnresolvedDays: 3,
+    deltaLabel: '3%',
+    deltaDirection: 'up',
+  },
+] satisfies import('../types').AdminPriorityArea[]
+
+export const adminStatusSummary = [
+  { id: 'waiting', label: '접수 대기', count: 156, colorType: 'blue', iconType: 'fileText' },
+  { id: 'received', label: '접수 완료', count: 374, colorType: 'blue', iconType: 'clipboard' },
+  { id: 'repairing', label: '보수 진행 중', count: 248, colorType: 'orange', iconType: 'wrench' },
+  { id: 'completed', label: '보수 완료', count: 1140, colorType: 'green', iconType: 'check' },
+  { id: 'rejected', label: '반려', count: 48, colorType: 'red', iconType: 'x' },
+] satisfies import('../types').AdminStatusSummaryItem[]
+
 export const riskMapStats: RiskMapStats = {
   highRiskCount: 5,
   recentReportCount: 128,

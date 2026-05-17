@@ -6,8 +6,8 @@ import {
   ChevronRight,
   ClipboardList,
   FileText,
-  LayoutDashboard,
   MapPin,
+  Settings,
   ShieldCheck,
 } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
@@ -33,7 +33,7 @@ const navItems: NavItem[] = [
   { to: '/agency', label: '관할기관 안내', icon: Building2 },
   { to: '/agency', label: '보상 청구', icon: FileText },
   { to: '/alerts', label: '실시간 알림', icon: Bell },
-  { to: '/admin', label: '관리자 대시보드', icon: LayoutDashboard },
+  { to: '/admin', label: '관리자 대시보드', icon: Settings },
 ]
 
 function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
@@ -63,11 +63,11 @@ function BrandLogo({ compact = false }: { compact?: boolean }) {
         className={cn('h-auto object-contain', compact ? 'w-[160px]' : 'w-[208px]')}
         fallback={
           <div>
-            <p className={cn('font-black tracking-[-0.04em] text-[#07182F]', compact ? 'text-[20px]' : 'text-[25px]')}>
+            <p className={cn('font-black text-[#07182F]', compact ? 'text-[20px]' : 'text-[25px]')}>
               포트홀 가드 <span className="text-[#0B6DDE]">AI</span>
             </p>
             {!compact && (
-              <p className="mt-1 text-[10px] font-bold tracking-[-0.03em] text-slate-500">
+              <p className="mt-1 text-[10px] font-bold text-slate-500">
                 AI로 예측하고, 함께 지키는 안전한 도로
               </p>
             )}
@@ -87,7 +87,7 @@ function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavIt
       end={item.to === '/report'}
       className={({ isActive }) =>
         cn(
-          'group flex items-center rounded-xl font-extrabold tracking-[-0.04em] transition focus-visible:outline-blue-400',
+          'group flex items-center rounded-xl font-extrabold transition focus-visible:outline-blue-400',
           mobile
             ? 'min-w-0 flex-col justify-center gap-1 px-1 py-2 text-[11px]'
             : compact
@@ -117,7 +117,7 @@ function SidebarNavItem({ item, compact = false, mobile = false }: { item: NavIt
 function PromoCard() {
   return (
     <div className="rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50 to-white p-5 text-center shadow-[0_18px_45px_rgba(0,96,210,0.07)]">
-      <p className="text-[14px] font-black leading-relaxed tracking-[-0.05em] text-blue-700">
+      <p className="text-[14px] font-black leading-relaxed text-blue-700">
         AI가 도로를 지키고
         <br />
         시민이 함께 안전을 만듭니다.
@@ -134,7 +134,7 @@ function PromoCard() {
       />
       <button
         type="button"
-        className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-100 bg-white text-[13px] font-black tracking-[-0.04em] text-blue-700 shadow-sm transition hover:bg-blue-50"
+        className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-100 bg-white text-[13px] font-black text-blue-700 shadow-sm transition hover:bg-blue-50"
       >
         서비스 소개 보기
         <ChevronRight size={16} aria-hidden="true" />
@@ -150,7 +150,7 @@ function SidebarFooter() {
         sources={['/assets/loading/molit-logo-cropped.png', '/assets/loading/molit-logo.png']}
         alt="국토교통부"
         className="h-auto w-[128px] object-contain"
-        fallback={<span className="text-[17px] font-black tracking-[-0.04em] text-slate-700">국토교통부</span>}
+        fallback={<span className="text-[17px] font-black text-slate-700">국토교통부</span>}
       />
       <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-500">
         © 2024 Ministry of Land,
@@ -206,7 +206,7 @@ function MobileHeader() {
 
 function MobileBottomNav() {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white px-2 py-2 shadow-[0_-10px_28px_rgba(15,40,70,0.08)] lg:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-slate-200 bg-white px-2 py-2 shadow-[0_-10px_28px_rgba(15,40,70,0.08)] lg:hidden" aria-label="하단 주요 메뉴">
       {navItems.slice(0, 5).map((item, index) => (
         <SidebarNavItem key={`${item.to}-${index}-mobile`} item={item} mobile />
       ))}

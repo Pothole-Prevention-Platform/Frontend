@@ -307,7 +307,9 @@ function UserTypeCard({ option, selected, onSelect }: { option: UserTypeOption; 
       />
       <span className="min-w-0">
         <span className="block text-[15px] font-black text-[#07182F]">{option.title}</span>
-        <span className="mt-2 block break-words text-[12px] font-semibold leading-snug text-slate-500">{option.description}</span>
+        <span className="mt-2 block break-words text-[12px] font-semibold leading-snug text-slate-500 [overflow-wrap:anywhere]">
+          {option.description}
+        </span>
       </span>
     </button>
   )
