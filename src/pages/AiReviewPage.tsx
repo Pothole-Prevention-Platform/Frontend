@@ -265,7 +265,7 @@ function FeatureScoreDots({ label, score }: { label: string; score: number }) {
           key={index}
           className={cn(
             'h-2.5 w-2.5 rounded-full',
-                  index < (score ?? 0) ? 'bg-blue-700' : 'bg-slate-200',
+            index < score ? 'bg-blue-700' : 'bg-slate-200',
           )}
         />
       ))}
@@ -506,14 +506,9 @@ export function AiReviewPage() {
     <div className="min-w-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-[30px] font-black tracking-[-0.05em] text-[#07182F] sm:text-[34px]">
-              AI 사진 판별
-            </h1>
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-[12px] font-black text-blue-700">
-              데모 분석 결과
-            </span>
-          </div>
+          <h1 className="text-[30px] font-black tracking-[-0.05em] text-[#07182F] sm:text-[34px]">
+            AI 사진 판별
+          </h1>
           <p className="mt-2 text-[15px] font-semibold tracking-[-0.03em] text-slate-500">
             업로드한 사진을 AI가 분석하여 포트홀 가능성과 상태를 판단합니다.
           </p>
