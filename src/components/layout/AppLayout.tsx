@@ -251,7 +251,7 @@ function MobileHeader() {
           홍길동
         </Link>
       </div>
-      <nav className="-mx-4 mt-3 hidden gap-2 overflow-x-auto px-4 pb-1 md:flex" aria-label="빠른 메뉴">
+      <nav className="-mx-4 mt-3 hidden gap-2 overflow-x-auto px-4 pb-1 lg:flex" aria-label="빠른 메뉴">
         {navItems.map((item, index) => (
           <SidebarNavItem key={`${item.to}-${index}-compact`} item={item} compact />
         ))}
@@ -262,7 +262,7 @@ function MobileHeader() {
 
 function MobileBottomNav() {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-[repeat(5,minmax(0,1fr))] gap-1 border-t border-slate-200 bg-white px-1 py-2 shadow-[0_-10px_28px_rgba(15,40,70,0.08)] lg:hidden" aria-label="하단 주요 메뉴">
+    <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-[repeat(5,minmax(0,1fr))] gap-1 border-t border-slate-200 bg-white px-1 py-2 shadow-[0_-10px_28px_rgba(15,40,70,0.08)] xl:hidden" aria-label="하단 주요 메뉴">
       {bottomNavItems.map((item, index) => (
         <SidebarNavItem key={`${item.to}-${index}-mobile`} item={item} mobile />
       ))}

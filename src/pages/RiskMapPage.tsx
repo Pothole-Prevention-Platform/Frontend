@@ -104,7 +104,7 @@ function FilterBar() {
           <span className="flex min-w-0 items-center gap-3 sm:gap-4">
             <span className="shrink-0 text-blue-700">{filterIcons[filter.id]}</span>
             <span className="min-w-0">
-              <span className="block truncate text-[13px] font-black tracking-[-0.04em] text-[#07182F] sm:text-[14px]">{filter.title}</span>
+              <span className="block truncate text-[12px] font-black tracking-[-0.02em] text-[#07182F] min-[380px]:text-[13px] sm:text-[14px] sm:tracking-[-0.04em]">{filter.title}</span>
               <span className="mt-1 block truncate text-[12px] font-semibold tracking-[-0.04em] text-slate-500">
                 {filterValues[filter.id]}
               </span>
@@ -117,10 +117,10 @@ function FilterBar() {
       <button
         type="button"
         onClick={resetFilters}
-        className="col-span-2 flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-black tracking-[-0.04em] text-slate-700 shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 sm:h-[64px] sm:min-w-[132px] sm:flex-none sm:text-[14px]"
+        className="col-span-2 flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-black tracking-[-0.02em] text-slate-700 shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 sm:h-[64px] sm:min-w-[132px] sm:flex-none sm:text-[14px] sm:tracking-[-0.04em]"
       >
         <RefreshCcw size={20} className="text-slate-600 sm:size-[22px]" aria-hidden="true" />
-        필터 초기화
+        <span className="whitespace-nowrap">필터 초기화</span>
       </button>
     </div>
   )
