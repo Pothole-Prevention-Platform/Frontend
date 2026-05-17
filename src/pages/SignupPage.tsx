@@ -435,7 +435,7 @@ function SignupFormCard() {
 
 function SignupFooter() {
   return (
-    <footer className="shrink-0 border-t border-slate-200 bg-white/95 px-5 py-5 sm:px-8 lg:px-11">
+    <footer className="shrink-0 border-t border-slate-200 bg-white/95 px-5 py-4 sm:px-8 lg:px-11">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-8">
           <MinistryLogo />
