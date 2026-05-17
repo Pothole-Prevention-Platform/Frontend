@@ -300,7 +300,7 @@ function RouteMarker({
     <div
       role="img"
       aria-label={label}
-      className={cn('absolute z-30 flex -translate-x-1/2 -translate-y-full items-center justify-center', className)}
+      className={cn('absolute z-20 flex -translate-x-1/2 -translate-y-full items-center justify-center', className)}
     >
       {tone === 'red' && <span className="absolute top-2 h-12 w-12 rounded-full bg-red-500/20" aria-hidden="true" />}
       <MapPinIcon className={cn('relative h-10 w-10 drop-shadow-[0_8px_12px_rgba(15,23,42,0.18)]', markerClass)} />
@@ -359,7 +359,7 @@ function FallbackRouteMap() {
         </span>
       ))}
 
-      <svg className="absolute inset-0 z-20 h-full w-full" viewBox="0 0 1200 320" preserveAspectRatio="none" aria-hidden="true">
+      <svg className="absolute inset-0 z-10 h-full w-full" viewBox="0 0 1200 320" preserveAspectRatio="none" aria-hidden="true">
         <path
           d="M410 20 L470 158 L610 148 L640 216 L790 184 L955 138 L1185 82"
           fill="none"
@@ -378,15 +378,15 @@ function FallbackRouteMap() {
         />
       </svg>
 
-      <div className="absolute left-[32%] top-[45%] z-40 -translate-x-1/2 -translate-y-1/2 text-red-600">
-        <span className="absolute left-1/2 top-1/2 h-[74px] w-[74px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500/20" />
-        <span className="absolute left-1/2 top-1/2 h-[48px] w-[48px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500/30" />
-        <DangerMapPinIcon className="relative h-[64px] w-[64px] drop-shadow-[0_18px_26px_rgba(220,38,38,0.32)]" />
+      <div className="absolute left-[32%] top-[30%] z-20 -translate-x-1/2 -translate-y-1/2 text-red-600 sm:top-[45%]">
+        <span className="absolute left-1/2 top-1/2 h-[62px] w-[62px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500/20 sm:h-[74px] sm:w-[74px]" />
+        <span className="absolute left-1/2 top-1/2 h-[42px] w-[42px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500/30 sm:h-[48px] sm:w-[48px]" />
+        <DangerMapPinIcon className="relative h-[54px] w-[54px] drop-shadow-[0_18px_26px_rgba(220,38,38,0.32)] sm:h-[64px] sm:w-[64px]" />
       </div>
 
       <RouteMarker className="left-[27%] top-[15%]" tone="green" label="출발 지점" />
-      <RouteMarker className="left-[38%] top-[50%]" tone="red" label="위험 지점" />
-      <RouteMarker className="left-[46%] top-[64%]" tone="orange" label="주의 지점" />
+      <RouteMarker className="left-[38%] top-[36%] sm:top-[50%]" tone="red" label="위험 지점" />
+      <RouteMarker className="left-[46%] top-[50%] sm:top-[64%]" tone="orange" label="주의 지점" />
       <RouteMarker className="left-[73%] top-[50%]" tone="orange" label="주의 지점" />
       <RouteMarker className="left-[95%] top-[31%]" tone="green" label="도착 지점" />
     </div>
