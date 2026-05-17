@@ -7,14 +7,9 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  ClipboardList,
-  FileText,
-  Landmark,
-  LayoutDashboard,
   MapPin,
   Plus,
   Route,
-  ShieldCheck,
   UserRound,
 } from 'lucide-react'
 import { cn } from '../utils/cn'
@@ -45,16 +40,6 @@ type SelectFieldProps = {
   options: string[]
   onChange: (value: string) => void
 }
-
-const navItems = [
-  { label: '위험 예측지도', icon: MapPin },
-  { label: '시민 신고', icon: ClipboardList },
-  { label: 'AI 판별', icon: ShieldCheck },
-  { label: '관할기관 안내', icon: Landmark },
-  { label: '보상 청구', icon: FileText },
-  { label: '실시간 알림', icon: Bell },
-  { label: '관리자 대시보드', icon: LayoutDashboard },
-]
 
 const setupSteps = ['사용자 설정', '지역 설정', '알림 설정', '완료']
 
@@ -104,126 +89,6 @@ function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
       className={className}
       onError={() => setSourceIndex((current) => current + 1)}
     />
-  )
-}
-
-function BrandLogo({ compact = false }: { compact?: boolean }) {
-  return (
-    <AssetImage
-      sources={['/assets/loading/pothole-guard-logo-cropped.png', '/assets/loading/pothole-guard-logo.png']}
-      alt="포트홀 가드 AI"
-      className={cn('h-auto object-contain', compact ? 'w-[178px] max-w-[64vw]' : 'w-[182px]')}
-      fallback={
-        <div>
-          <p className={cn('font-black tracking-[-0.04em] text-[#07182F]', compact ? 'text-[20px]' : 'text-[24px]')}>
-            포트홀 가드 <span className="text-[#0B6DDE]">AI</span>
-          </p>
-          {!compact && <p className="mt-1 text-[10px] font-bold text-slate-500">AI로 예측하고, 함께 지키는 안전한 도로</p>}
-        </div>
-      }
-    />
-  )
-}
-
-function MinistryLogo() {
-  return (
-    <AssetImage
-      sources={['/assets/loading/molit-logo-cropped.png', '/assets/loading/molit-logo.png']}
-      alt="국토교통부"
-      className="h-auto w-[122px] object-contain"
-      fallback={<span className="text-[17px] font-black text-slate-700">국토교통부</span>}
-    />
-  )
-}
-
-function SetupSidebar() {
-  return (
-    <aside className="hidden min-h-svh w-[250px] shrink-0 flex-col border-r border-slate-200 bg-white px-5 py-6 shadow-[8px_0_30px_rgba(15,40,70,0.04)] xl:flex">
-      <BrandLogo />
-      <nav className="mt-9 space-y-2" aria-label="서비스 메뉴">
-        {navItems.map(({ label, icon: Icon }) => (
-          <button
-            type="button"
-            key={label}
-            className="flex w-full items-center gap-4 rounded-xl px-4 py-3 text-left text-[15px] font-extrabold text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
-          >
-            <Icon size={22} className="text-slate-500" aria-hidden="true" />
-            {label}
-          </button>
-        ))}
-      </nav>
-      <div className="relative mt-auto space-y-7">
-        <div className="rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50 to-white p-5 text-center shadow-[0_18px_45px_rgba(0,96,210,0.07)]">
-          <p className="text-[14px] font-black leading-relaxed text-blue-700">
-            AI가 도로를 지키고
-            <br />
-            시민이 함께 안전을 만듭니다.
-          </p>
-          <AssetImage
-            sources={['/assets/auth/signup-security.webp', '/assets/auth/signup-security.png']}
-            alt="안전한 개인정보 보호를 상징하는 방패 일러스트"
-            className="mx-auto mt-4 h-[62px] w-[72px] object-contain"
-            fallback={
-              <div className="mx-auto mt-4 flex h-[62px] w-[72px] items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
-                <ShieldCheck size={38} aria-hidden="true" />
-              </div>
-            }
-          />
-          <button
-            type="button"
-            className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-100 bg-white text-[13px] font-black text-blue-700 shadow-sm transition hover:bg-blue-50"
-          >
-            서비스 소개 보기
-            <ChevronRight size={16} aria-hidden="true" />
-          </button>
-        </div>
-        <div className="rounded-2xl bg-white p-4 shadow-[0_16px_40px_rgba(15,40,70,0.05)]">
-          <MinistryLogo />
-          <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-500">
-            © 2024 Ministry of Land,
-            <br />
-            Infrastructure and Transport.
-            <br />
-            All rights reserved.
-          </p>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
-function MobileHeader() {
-  return (
-    <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 xl:hidden">
-      <BrandLogo compact />
-    </header>
-  )
-}
-
-function TopUserBar({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className={cn('flex items-center gap-4', !compact && 'hidden md:flex')}>
-      <button
-        type="button"
-        aria-label="알림 보기"
-        className="relative flex h-10 w-10 items-center justify-center rounded-full text-[#07182F] transition hover:bg-blue-50"
-      >
-        <Bell size={compact ? 21 : 25} aria-hidden="true" />
-        <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">
-          12
-        </span>
-      </button>
-      <div className="hidden items-center gap-3 sm:flex">
-        <div className="h-11 w-11 overflow-hidden rounded-full bg-gradient-to-br from-slate-200 to-blue-100 shadow-sm" aria-hidden="true">
-          <div className="mx-auto mt-2 h-5 w-5 rounded-full bg-[#F2C2A2]" />
-          <div className="mx-auto mt-1 h-8 w-7 rounded-t-full bg-[#10233F]" />
-        </div>
-        <button type="button" className="flex items-center gap-2 text-[14px] font-black text-slate-800 transition hover:text-blue-700">
-          홍길동
-          <ChevronDown size={18} aria-hidden="true" />
-        </button>
-      </div>
-    </div>
   )
 }
 
@@ -389,23 +254,16 @@ export function InitialSetupPage() {
   const goToRiskMap = () => navigate('/risk-map')
 
   return (
-    <main className="min-h-svh overflow-x-hidden bg-white text-slate-900">
-      <MobileHeader />
-      <div className="flex w-full min-w-0 overflow-x-hidden">
-        <SetupSidebar />
-        <section className="relative min-h-svh w-full min-w-0 flex-1 basis-0 overflow-x-hidden bg-gradient-to-br from-white via-[#FBFDFF] to-[#F4F8FF] px-4 pb-5 pt-5 sm:px-6 xl:px-10">
-          <div className="absolute right-9 top-6">
-            <TopUserBar />
-          </div>
-          <div className="mx-auto w-[calc(100vw-2rem)] min-w-0 max-w-[1440px] sm:w-full">
-            <div className="pr-0 md:pr-44">
+    <section className="w-full min-w-0 overflow-x-hidden">
+      <div className="mx-auto w-full min-w-0 max-w-[1440px]">
+        <div className="pr-0 md:pr-44">
               <h1 className="text-[30px] font-black text-[#07182F] sm:text-[32px]">초기 설정</h1>
               <p className="mt-2 text-[14px] font-semibold text-slate-500">서비스를 맞춤 설정하고 더 안전한 도로 환경을 만들어보세요.</p>
-            </div>
+        </div>
 
-            <SetupProgress />
+        <SetupProgress />
 
-            <div className="mt-4 space-y-2.5">
+        <div className="mt-4 space-y-2.5">
               <SectionCard number={1} title="사용자 유형 선택" description="서비스 이용 목적에 맞는 사용자 유형을 선택해주세요.">
                 <div className="grid gap-4 xl:grid-cols-3 xl:gap-5">
                   {userTypeOptions.map((option) => (
@@ -535,9 +393,9 @@ export function InitialSetupPage() {
                   />
                 </div>
               </SectionCard>
-            </div>
+        </div>
 
-            <div className="mt-3 flex flex-col gap-3 border-t border-slate-200 pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 flex flex-col gap-3 border-t border-slate-200 pt-3 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
                 onClick={goToRiskMap}
@@ -553,10 +411,8 @@ export function InitialSetupPage() {
                 설정 완료
                 <ChevronRight size={18} aria-hidden="true" />
               </button>
-            </div>
-          </div>
-        </section>
+        </div>
       </div>
-    </main>
+    </section>
   )
 }

@@ -15,13 +15,13 @@ import { SignupPage } from '../pages/SignupPage'
 
 export const router = createBrowserRouter([
   { path: '/', element: <LoadingPage /> },
-  { path: '/setup', element: <InitialSetupPage /> },
-  { path: '/onboarding', element: <InitialSetupPage /> },
   { path: '/auth/login', element: <LoginPage /> },
   { path: '/auth/signup', element: <SignupPage /> },
   {
     element: <AppLayout />,
     children: [
+      { path: '/setup', element: <InitialSetupPage /> },
+      { path: '/onboarding', element: <InitialSetupPage /> },
       { path: '/risk-map', element: <RiskMapPage /> },
       { path: '/report', element: <CitizenReportPage /> },
       { path: '/report/ai-review', element: <AiReviewPage /> },
