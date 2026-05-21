@@ -1,5 +1,6 @@
 export type UserRole = 'rider' | 'driver' | 'victim' | 'admin'
 
+export type * from './api'
 export type * from './report'
 export type * from './claim'
 

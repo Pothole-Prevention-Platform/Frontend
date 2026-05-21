@@ -1,25 +1,38 @@
+export type HazardType = 'POTHOLE' | 'CRACK' | 'SUBSIDENCE' | 'FALLING_OBJECT' | 'OTHER'
+
+export type ReporterSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
+export type AiSeverity = 'NONE' | 'SMALL' | 'MEDIUM' | 'LARGE'
+
+export type CrackSeverity = 'NONE' | 'MILD' | 'MODERATE' | 'SEVERE'
+
+export type PotholeShape = 'IRREGULAR' | 'CIRCULAR' | 'LINEAR' | 'OTHER'
+
 export interface ReportAiResult {
-  detected?: boolean
-  confidence?: number
-  severity?: string
-  estimatedSizeCm?: number
-  cracks?: boolean | string
-  depthMinCm?: number
-  depthMaxCm?: number
-  shape?: string
-  processingTimeMs?: number
-  description?: string
+  detected?: boolean | null
+  isPothole?: boolean | null
+  confidence?: number | null
+  severity?: AiSeverity | string | null
+  riskScore?: number | null
+  estimatedSizeCm?: number | null
+  cracks?: CrackSeverity | string | boolean | null
+  depthMinCm?: number | null
+  depthMaxCm?: number | null
+  shape?: PotholeShape | string | null
+  bbox?: number[] | null
+  processingTimeMs?: number | null
+  description?: string | null
   [key: string]: unknown
 }
 
 export interface ReportAgencyResult {
-  agencyName?: string
-  departmentName?: string
-  department?: string
-  jurisdiction?: string
-  roadManagementAgency?: string
-  phone?: string
-  address?: string
+  agencyName?: string | null
+  departmentName?: string | null
+  department?: string | null
+  jurisdiction?: string | null
+  roadManagementAgency?: string | null
+  phone?: string | null
+  address?: string | null
   [key: string]: unknown
 }
 
@@ -27,21 +40,37 @@ export interface CitizenReportCreateInput {
   image: File
   latitude: number
   longitude: number
-  hazardType: string
-  severity?: string
+  address?: string
+  locationDetail?: string
+  hazardType?: HazardType
+  reporterSeverity?: ReporterSeverity
   description?: string
 }
 
 export interface CitizenReportResponse {
-  id?: string
   reportId?: string
-  imageUrl?: string
-  latitude?: number
-  longitude?: number
-  hazardType?: string
-  severity?: string
-  description?: string
-  address?: string
+  imageUrl?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  address?: string | null
+  locationDetail?: string | null
+  submittedAt?: string | null
+  hazardType?: HazardType | string | null
+  reporterSeverity?: ReporterSeverity | string | null
+  description?: string | null
+  isPothole?: boolean | null
+  confidence?: number | null
+  severity?: AiSeverity | string | null
+  riskScore?: number | null
+  estimatedSizeCm?: number | null
+  cracks?: CrackSeverity | string | null
+  depthMinCm?: number | null
+  depthMaxCm?: number | null
+  shape?: PotholeShape | string | null
+  bbox?: number[] | null
+  managingAuthority?: string | null
+
+  id?: string
   location?: string
   createdAt?: string
   reportedAt?: string

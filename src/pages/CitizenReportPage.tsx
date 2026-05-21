@@ -15,7 +15,12 @@ import {
   X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { createCitizenReport, getReportId } from '../api/reportApi'
+import {
+  createCitizenReport,
+  getReportId,
+  REPORT_IMAGE_MAX_BYTES,
+  SEOUL_FALLBACK_COORDINATES,
+} from '../api/reportApi'
 import {
   aiVerificationSteps,
   citizenReportMock,
@@ -23,6 +28,7 @@ import {
   riskSeverityOptions,
 } from '../data/mockData'
 import type { RecentCitizenReport, ReportSeverityId, RiskSeverityOption } from '../types'
+import type { HazardType, ReporterSeverity } from '../types/report'
 import { cn } from '../utils/cn'
 
 type AssetImageProps = {
@@ -45,6 +51,21 @@ const riskTypeOptions = [
   '낙하물',
   '기타 도로 위험',
 ] as const
+
+const hazardTypeByLabel: Record<string, HazardType> = {
+  '포트홀 (도로 파임)': 'POTHOLE',
+  '균열 (도로 갈라짐)': 'CRACK',
+  '도로 침하': 'SUBSIDENCE',
+  낙하물: 'FALLING_OBJECT',
+  '기타 도로 위험': 'OTHER',
+}
+
+const reporterSeverityById: Record<ReportSeverityId, ReporterSeverity> = {
+  low: 'LOW',
+  medium: 'MEDIUM',
+  high: 'HIGH',
+  critical: 'CRITICAL',
+}
 
 const severityColorClasses: Record<RiskSeverityOption['color'], { dot: string; text: string; ring: string }> = {
   green: {
@@ -272,7 +293,15 @@ function MapPreview() {
   )
 }
 
-function LocationSection() {
+function LocationSection({
+  address,
+  locationDetail,
+  onLocationDetailChange,
+}: {
+  address: string
+  locationDetail: string
+  onLocationDetailChange: (locationDetail: string) => void
+}) {
   return (
     <div className="grid gap-5 lg:grid-cols-[270px_minmax(0,1fr)]">
       <MapPreview />
@@ -303,7 +332,7 @@ function LocationSection() {
           <div className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_96px]">
             <input
               id="report-address"
-              value={citizenReportMock.address}
+              value={address}
               readOnly
               className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 outline-none"
             />
@@ -323,6 +352,8 @@ function LocationSection() {
           </label>
           <input
             id="report-location-detail"
+            value={locationDetail}
+            onChange={(event) => onLocationDetailChange(event.target.value)}
             placeholder={citizenReportMock.detailLocationPlaceholder}
             className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           />
@@ -444,6 +475,8 @@ function ReportForm({
   selectedSeverity,
   riskType,
   description,
+  address,
+  locationDetail,
   previewUrl,
   fileName,
   fileSize,
@@ -452,6 +485,7 @@ function ReportForm({
   onRiskTypeChange,
   onSelectSeverity,
   onDescriptionChange,
+  onLocationDetailChange,
   onSubmit,
   errorMessage,
   isSubmitting,
@@ -460,6 +494,8 @@ function ReportForm({
   selectedSeverity: ReportSeverityId
   riskType: string
   description: string
+  address: string
+  locationDetail: string
   previewUrl: string | null
   fileName: string
   fileSize: string
@@ -468,6 +504,7 @@ function ReportForm({
   onRiskTypeChange: (riskType: string) => void
   onSelectSeverity: (severity: ReportSeverityId) => void
   onDescriptionChange: (description: string) => void
+  onLocationDetailChange: (locationDetail: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   errorMessage: string
   isSubmitting: boolean
@@ -501,7 +538,11 @@ function ReportForm({
       <div className="border-b border-slate-200 px-5 py-4">
         <SectionTitle number={2} title="위치 정보" label="필수" />
         <div className="mt-4">
-          <LocationSection />
+          <LocationSection
+            address={address}
+            locationDetail={locationDetail}
+            onLocationDetailChange={onLocationDetailChange}
+          />
         </div>
       </div>
 
@@ -732,6 +773,8 @@ export function CitizenReportPage() {
   const [selectedSeverity, setSelectedSeverity] = useState<ReportSeverityId>(citizenReportMock.defaultSeverity)
   const [riskType, setRiskType] = useState(citizenReportMock.defaultRiskType)
   const [description, setDescription] = useState('')
+  const [address] = useState(citizenReportMock.address)
+  const [locationDetail, setLocationDetail] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -749,6 +792,18 @@ export function CitizenReportPage() {
     const file = event.target.files?.[0]
 
     if (file) {
+      if (file.size > REPORT_IMAGE_MAX_BYTES) {
+        setSelectedFile(null)
+        setPreviewUrl(null)
+        setSubmitError('이미지는 10MB 이하만 업로드할 수 있습니다.')
+        event.target.value = ''
+        return
+      }
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+
       setSelectedFile(file)
       setPreviewUrl(URL.createObjectURL(file))
       setSubmitError('')
@@ -756,6 +811,10 @@ export function CitizenReportPage() {
   }
 
   const handleClearFile = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+    }
+
     setSelectedFile(null)
     setPreviewUrl(null)
   }
@@ -768,16 +827,23 @@ export function CitizenReportPage() {
       return
     }
 
+    if (selectedFile.size > REPORT_IMAGE_MAX_BYTES) {
+      setSubmitError('이미지는 10MB 이하만 업로드할 수 있습니다.')
+      return
+    }
+
     setIsSubmitting(true)
     setSubmitError('')
 
     try {
       const result = await createCitizenReport({
         image: selectedFile,
-        latitude: 37.5665,
-        longitude: 126.978,
-        hazardType: riskType,
-        severity: selectedSeverity,
+        latitude: SEOUL_FALLBACK_COORDINATES.latitude,
+        longitude: SEOUL_FALLBACK_COORDINATES.longitude,
+        address: address.trim() || undefined,
+        locationDetail: locationDetail.trim() || undefined,
+        hazardType: hazardTypeByLabel[riskType] ?? 'OTHER',
+        reporterSeverity: reporterSeverityById[selectedSeverity],
         description: description.trim() || undefined,
       })
       const reportId = getReportId(result)
@@ -813,6 +879,8 @@ export function CitizenReportPage() {
           selectedSeverity={selectedSeverity}
           riskType={riskType}
           description={description}
+          address={address}
+          locationDetail={locationDetail}
           previewUrl={previewUrl}
           fileName={fileName}
           fileSize={fileSize}
@@ -821,6 +889,7 @@ export function CitizenReportPage() {
           onRiskTypeChange={setRiskType}
           onSelectSeverity={setSelectedSeverity}
           onDescriptionChange={setDescription}
+          onLocationDetailChange={setLocationDetail}
           onSubmit={handleSubmit}
           errorMessage={submitError}
           isSubmitting={isSubmitting}

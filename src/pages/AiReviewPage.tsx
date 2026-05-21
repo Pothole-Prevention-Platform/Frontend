@@ -18,6 +18,7 @@ import {
   Waves,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getApiBaseUrl } from '../api/apiClient'
 import { getCitizenReport } from '../api/reportApi'
 import {
   aiAnalysisSteps,
@@ -63,6 +64,12 @@ type AiReviewViewData = {
   features: AiDetectedFeature[]
 }
 
+type ReportLoadState = {
+  reportId: string
+  reviewData: AiReviewViewData | null
+  notice: string
+}
+
 const fallbackReviewData: AiReviewViewData = {
   capturedAt: aiReviewResult.capturedAt,
   location: aiReviewResult.location,
@@ -72,6 +79,31 @@ const fallbackReviewData: AiReviewViewData = {
   description: aiReviewResult.description,
   imageSources: aiReviewResult.imageSources,
   features: aiDetectedFeatures,
+}
+
+const aiSeverityLabels: Record<string, string> = {
+  NONE: '없음',
+  SMALL: '소형',
+  MEDIUM: '중형',
+  LARGE: '대형',
+  critical: '매우 높음',
+  high: '높음',
+  medium: '보통',
+  low: '낮음',
+}
+
+const crackLabels: Record<string, string> = {
+  NONE: '없음',
+  MILD: '약함',
+  MODERATE: '보통',
+  SEVERE: '심함',
+}
+
+const shapeLabels: Record<string, string> = {
+  IRREGULAR: '불규칙형',
+  CIRCULAR: '원형',
+  LINEAR: '선형',
+  OTHER: '기타',
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -139,6 +171,14 @@ function normalizePercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(percent)))
 }
 
+function optionalNumber(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function optionalString(value: string | null | undefined) {
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
 function formatSeverity(severity: string | undefined, percent: number) {
   if (!severity) {
     if (percent >= 90) return '매우 높음'
@@ -147,14 +187,7 @@ function formatSeverity(severity: string | undefined, percent: number) {
     return '낮음'
   }
 
-  const severityMap: Record<string, string> = {
-    critical: '매우 높음',
-    high: '높음',
-    medium: '보통',
-    low: '낮음',
-  }
-
-  return severityMap[severity.toLowerCase()] ?? severity
+  return aiSeverityLabels[severity] ?? aiSeverityLabels[severity.toLowerCase()] ?? severity
 }
 
 function formatCracks(value: boolean | string | undefined) {
@@ -162,7 +195,41 @@ function formatCracks(value: boolean | string | undefined) {
     return value ? '있음' : '없음'
   }
 
+  return value ? crackLabels[value] ?? value : undefined
+}
+
+function formatShape(value: string | undefined) {
+  return value ? shapeLabels[value] ?? value : undefined
+}
+
+function formatDetected(value: boolean | string | undefined) {
+  if (typeof value === 'boolean') {
+    return value ? '감지됨' : '감지되지 않음'
+  }
+
   return value
+}
+
+function formatBbox(value: number[] | null | undefined) {
+  if (!value || value.length < 4) {
+    return undefined
+  }
+
+  const [x, y, width, height] = value
+  return `x ${x}, y ${y}, 너비 ${width}, 높이 ${height}`
+}
+
+function resolveReportImageUrl(imageUrl: string | undefined) {
+  if (!imageUrl) {
+    return undefined
+  }
+
+  if (/^(https?:)?\/\//.test(imageUrl) || imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
+    return imageUrl
+  }
+
+  const normalizedPath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`
+  return `${getApiBaseUrl()}${normalizedPath}`
 }
 
 function buildAgencyLabel(agency: ReportAgencyResult | undefined) {
@@ -191,23 +258,35 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
     'agency',
     'responsibleAgency',
   ])
-  const detected = getBooleanOrString(aiRecord, ['detected', 'isPothole', 'potholeDetected'])
-  const confidenceValue = getNumber(aiRecord, ['confidence', 'score', 'probability', 'potholeProbability']) ?? 0
+  const detected =
+    getBooleanOrString(aiRecord, ['detected', 'isPothole', 'potholeDetected']) ??
+    (typeof report.isPothole === 'boolean' ? report.isPothole : undefined)
+  const confidenceValue =
+    getNumber(aiRecord, ['confidence', 'score', 'probability', 'potholeProbability']) ??
+    optionalNumber(report.confidence) ??
+    0
   const confidence = normalizePercent(confidenceValue)
   const potholeProbability = normalizePercent(
     getNumber(aiRecord, ['potholeProbability', 'probability', 'confidence', 'score']) ?? confidence,
   )
-  const severity = getString(aiRecord, ['severity', 'riskLevel', 'level']) ?? report.severity
-  const estimatedSizeCm = getNumber(aiRecord, ['estimatedSizeCm', 'sizeCm', 'diameterCm'])
-  const depthMinCm = getNumber(aiRecord, ['depthMinCm', 'minDepthCm'])
-  const depthMaxCm = getNumber(aiRecord, ['depthMaxCm', 'maxDepthCm'])
-  const cracks = formatCracks(getBooleanOrString(aiRecord, ['cracks', 'hasCracks']))
-  const shape = getString(aiRecord, ['shape'])
+  const severity = getString(aiRecord, ['severity', 'riskLevel', 'level']) ?? optionalString(report.severity)
+  const riskScore = getNumber(aiRecord, ['riskScore']) ?? optionalNumber(report.riskScore)
+  const estimatedSizeCm =
+    getNumber(aiRecord, ['estimatedSizeCm', 'sizeCm', 'diameterCm']) ?? optionalNumber(report.estimatedSizeCm)
+  const depthMinCm = getNumber(aiRecord, ['depthMinCm', 'minDepthCm']) ?? optionalNumber(report.depthMinCm)
+  const depthMaxCm = getNumber(aiRecord, ['depthMaxCm', 'maxDepthCm']) ?? optionalNumber(report.depthMaxCm)
+  const cracks = formatCracks(
+    getBooleanOrString(aiRecord, ['cracks', 'hasCracks']) ?? optionalString(report.cracks),
+  )
+  const shape = formatShape(getString(aiRecord, ['shape']) ?? optionalString(report.shape))
+  const bbox = Array.isArray(report.bbox) ? report.bbox : undefined
   const processingTimeMs = getNumber(aiRecord, ['processingTimeMs', 'elapsedMs'])
-  const imageUrl = getString(reportRecord, ['imageUrl', 'photoUrl', 'image'])
-  const agencyLabel = buildAgencyLabel(agency)
+  const imageUrl = resolveReportImageUrl(getString(reportRecord, ['imageUrl', 'photoUrl', 'image']))
+  const agencyLabel = optionalString(report.managingAuthority) ?? buildAgencyLabel(agency)
   const resultLevel = formatSeverity(severity, potholeProbability)
-  const detectedText = typeof detected === 'boolean' ? (detected ? '감지됨' : '감지되지 않음') : detected
+  const detectedText = formatDetected(detected)
+  const location = [optionalString(report.address), optionalString(report.locationDetail)].filter(Boolean).join(' · ')
+  const capturedAt = optionalString(report.submittedAt) ?? report.createdAt ?? report.reportedAt ?? fallbackReviewData.capturedAt
 
   const features: AiDetectedFeature[] = [
     {
@@ -233,6 +312,16 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
       iconName: 'alertTriangle',
     },
   ]
+
+  if (riskScore !== undefined) {
+    features.push({
+      id: 'risk-score',
+      label: '위험 점수',
+      value: `${riskScore}/9`,
+      severity: riskScore >= 6 ? 'danger' : 'warning',
+      iconName: 'shieldAlert',
+    })
+  }
 
   if (estimatedSizeCm !== undefined) {
     features.push({
@@ -277,6 +366,18 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
     })
   }
 
+  const bboxText = formatBbox(bbox)
+
+  if (bboxText) {
+    features.push({
+      id: 'bbox',
+      label: '탐지 영역',
+      value: bboxText,
+      severity: 'normal',
+      iconName: 'crosshair',
+    })
+  }
+
   if (processingTimeMs !== undefined) {
     features.push({
       id: 'processing-time',
@@ -298,15 +399,15 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
   }
 
   return {
-    capturedAt: report.createdAt ?? report.reportedAt ?? fallbackReviewData.capturedAt,
-    location: report.address ?? report.location ?? agency?.jurisdiction ?? fallbackReviewData.location,
+    capturedAt,
+    location: location || report.location || agency?.jurisdiction || fallbackReviewData.location,
     potholeProbability,
     confidence,
     resultLevel,
     description:
       getString(aiRecord, ['description', 'summary', 'message']) ??
       report.description ??
-      '백엔드에서 받은 인공지능 분석 결과입니다.',
+      (detected === false ? '포트홀로 보기 어려운 신고입니다.' : '백엔드에서 받은 인공지능 분석 결과입니다.'),
     imageSources: imageUrl ? [imageUrl, ...aiReviewResult.imageSources] : aiReviewResult.imageSources,
     features,
   }
@@ -777,36 +878,45 @@ export function AiReviewPage() {
   const [searchParams] = useSearchParams()
   const reportId = searchParams.get('reportId') ?? ''
   const [notice, setNotice] = useState('')
-  const [apiNotice, setApiNotice] = useState('')
-  const [reviewData, setReviewData] = useState<AiReviewViewData | null>(null)
-  const review = reviewData ?? fallbackReviewData
+  const [reportLoadState, setReportLoadState] = useState<ReportLoadState>({
+    reportId: '',
+    reviewData: null,
+    notice: '',
+  })
+  const currentReportLoadState = reportLoadState.reportId === reportId ? reportLoadState : null
+  const review = currentReportLoadState?.reviewData ?? fallbackReviewData
+  const displayApiNotice = reportId
+    ? currentReportLoadState?.notice ?? '신고 분석 결과를 불러오는 중입니다.'
+    : '신고 번호가 없어 데모 분석 결과를 표시합니다.'
 
   useEffect(() => {
     let isActive = true
 
     if (!reportId) {
-      setReviewData(null)
-      setApiNotice('신고 번호가 없어 데모 분석 결과를 표시합니다.')
       return () => {
         isActive = false
       }
     }
 
-    setApiNotice('신고 분석 결과를 불러오는 중입니다.')
-
     getCitizenReport(reportId)
       .then((report) => {
         if (!isActive) return
 
-        setReviewData(mapReportToReviewData(report))
-        setApiNotice('백엔드에서 불러온 실제 신고 분석 결과입니다.')
+        setReportLoadState({
+          reportId,
+          reviewData: mapReportToReviewData(report),
+          notice: '백엔드에서 불러온 실제 신고 분석 결과입니다.',
+        })
       })
       .catch((error) => {
         if (!isActive) return
 
         const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
-        setReviewData(null)
-        setApiNotice(`백엔드 응답을 불러오지 못해 데모 분석 결과를 표시합니다. (${message})`)
+        setReportLoadState({
+          reportId,
+          reviewData: null,
+          notice: `백엔드 응답을 불러오지 못해 데모 분석 결과를 표시합니다. (${message})`,
+        })
       })
 
     return () => {
@@ -827,9 +937,9 @@ export function AiReviewPage() {
         </div>
       </div>
 
-      {apiNotice && (
+      {displayApiNotice && (
         <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] font-bold leading-5 text-blue-700" aria-live="polite">
-          {apiNotice}
+          {displayApiNotice}
         </div>
       )}
 

@@ -1,10 +1,19 @@
 import { apiBlob, apiForm, apiJson } from './apiClient'
 import type {
+  AttachmentResponse,
   ClaimAttachmentInput,
   ClaimDraftInput,
   ClaimResponse,
   ClaimUpdateInput,
 } from '../types/claim'
+
+const CLAIM_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+
+function assertAttachmentFile(file: File) {
+  if (file.size > CLAIM_ATTACHMENT_MAX_BYTES) {
+    throw new Error('첨부 파일은 10MB 이하만 업로드할 수 있습니다.')
+  }
+}
 
 export function createClaimDraft(input: ClaimDraftInput) {
   return apiJson<ClaimResponse>('/api/citizen/claim', {
@@ -25,11 +34,17 @@ export function updateClaim(claimId: string, input: ClaimUpdateInput) {
 }
 
 export function uploadClaimAttachment({ attachmentType, claimId, file }: ClaimAttachmentInput) {
+  assertAttachmentFile(file)
+
   const formData = new FormData()
-  formData.append('attachmentType', attachmentType)
   formData.append('file', file)
 
-  return apiForm<ClaimResponse>(`/api/citizen/claim/${encodeURIComponent(claimId)}/attachments`, formData)
+  const searchParams = new URLSearchParams({ attachmentType })
+
+  return apiForm<AttachmentResponse>(
+    `/api/citizen/claim/${encodeURIComponent(claimId)}/attachments?${searchParams.toString()}`,
+    formData,
+  )
 }
 
 export function submitClaim(claimId: string) {

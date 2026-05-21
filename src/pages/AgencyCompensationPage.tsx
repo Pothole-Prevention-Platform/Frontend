@@ -22,6 +22,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createClaimDraft,
   downloadClaimPdf,
+  getClaim,
   submitClaim,
   uploadClaimAttachment,
 } from '../api/claimApi'
@@ -36,7 +37,7 @@ import {
   vehicleInfo,
 } from '../data/mockData'
 import type { ClaimChecklistItem, EvidencePhoto } from '../types'
-import type { ClaimResponse } from '../types/claim'
+import type { AttachmentResponse, ChecklistResponse, ClaimAttachmentType, ClaimResponse } from '../types/claim'
 import { cn } from '../utils/cn'
 
 type ModeKey = 'agency' | 'claim'
@@ -172,6 +173,64 @@ function getClaimId(claim: ClaimResponse | null) {
   return claim?.claimId ?? claim?.id ?? ''
 }
 
+const attachmentTypeOptions: Array<{ label: string; value: ClaimAttachmentType }> = [
+  { label: '피해 사진', value: 'PHOTO_DAMAGE' },
+  { label: '수리 견적서', value: 'REPAIR_ESTIMATE' },
+  { label: '통장 사본', value: 'BANKBOOK' },
+  { label: '신분증 사본', value: 'ID_CARD' },
+  { label: '기타 자료', value: 'OTHER' },
+]
+
+const claimStatusLabels: Record<string, string> = {
+  DRAFT: '초안',
+  SUBMITTED: '제출 완료',
+  ACCEPTED: '승인',
+  REJECTED: '반려',
+}
+
+function formatCurrency(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '-'
+  }
+
+  return `${value.toLocaleString('ko-KR')}원`
+}
+
+function toApiDateTime(value: string) {
+  if (!value) {
+    return undefined
+  }
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+}
+
+function getChecklistItems(checklist: ChecklistResponse | null | undefined): ClaimChecklistItem[] {
+  if (!checklist) {
+    return claimChecklistItems
+  }
+
+  return [
+    { id: 'claim-form', title: '보상 청구서 (기본 정보)', status: checklist.claimForm ? '완료' : '준비 중' },
+    { id: 'incident-statement', title: '사고 경위서', status: checklist.incidentStatement ? '완료' : '준비 중' },
+    { id: 'damage-photos', title: '피해 사진', status: checklist.damagePhotos ? '완료' : '준비 중' },
+    { id: 'repair-estimate', title: '수리 견적서', status: checklist.repairEstimate ? '완료' : '준비 중' },
+    { id: 'bankbook-copy', title: '통장 사본', status: checklist.bankbook ? '완료' : '준비 중' },
+    { id: 'id-copy', title: '신분증 사본', status: checklist.idCard ? '완료' : '준비 중' },
+  ]
+}
+
+function mergeUploadedAttachment(claim: ClaimResponse | null, attachment: AttachmentResponse) {
+  if (!claim) {
+    return claim
+  }
+
+  return {
+    ...claim,
+    attachments: [...(claim.attachments ?? []), attachment],
+  }
+}
+
 export function AgencyCompensationPage() {
   const [searchParams] = useSearchParams()
   const reportId = searchParams.get('reportId') ?? ''
@@ -180,9 +239,16 @@ export function AgencyCompensationPage() {
   const [documentPage, setDocumentPage] = useState(claimDocumentPreview.currentPage)
   const [notice, setNotice] = useState('')
   const [claim, setClaim] = useState<ClaimResponse | null>(null)
+  const [incidentAt, setIncidentAt] = useState('')
+  const [incidentType, setIncidentType] = useState(accidentInfo.accidentType)
   const [damageDescription, setDamageDescription] = useState('포트홀 충격으로 차량 타이어와 휠에 손상이 발생했습니다.')
   const [estimatedCost, setEstimatedCost] = useState('350000')
-  const [attachmentType, setAttachmentType] = useState('damage_photo')
+  const [vehicleModel, setVehicleModel] = useState(vehicleInfo.model)
+  const [vehiclePlateNumber, setVehiclePlateNumber] = useState(vehicleInfo.plateNumber)
+  const [vehicleYear, setVehicleYear] = useState(vehicleInfo.year)
+  const [insurer, setInsurer] = useState(vehicleInfo.insuranceCompany)
+  const [contact, setContact] = useState(vehicleInfo.phone)
+  const [attachmentType, setAttachmentType] = useState<ClaimAttachmentType>('PHOTO_DAMAGE')
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [isCreatingClaim, setIsCreatingClaim] = useState(false)
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
@@ -190,12 +256,15 @@ export function AgencyCompensationPage() {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const navigate = useNavigate()
   const claimId = getClaimId(claim)
+  const isDraftClaim = !claim || claim.status === 'DRAFT'
+  const displayChecklistItems = getChecklistItems(claim?.checklist)
+  const displayClaimStatus = claim?.status ? claimStatusLabels[claim.status] ?? claim.status : '초안 생성 전'
 
   const vehicleFields = [
-    { label: '차량 번호', value: vehicleInfo.plateNumber },
-    { label: '차종', value: vehicleInfo.model },
-    { label: '연식', value: vehicleInfo.year },
-    { label: '보험사', value: vehicleInfo.insuranceCompany },
+    { label: '차량 번호', value: claim?.vehiclePlateNumber ?? vehiclePlateNumber },
+    { label: '차종', value: claim?.vehicleModel ?? vehicleModel },
+    { label: '연식', value: claim?.vehicleYear ? String(claim.vehicleYear) : vehicleYear },
+    { label: '보험사', value: claim?.insurer ?? insurer },
   ]
 
   const handleAttachmentChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -204,6 +273,7 @@ export function AgencyCompensationPage() {
 
   const handleCreateClaimDraft = async () => {
     const parsedEstimatedCost = Number.parseInt(estimatedCost.replace(/[^\d]/g, ''), 10)
+    const parsedVehicleYear = Number.parseInt(vehicleYear.replace(/[^\d]/g, ''), 10)
 
     if (!reportId) {
       setNotice('신고 번호가 없어 청구 초안을 만들 수 없습니다. AI 판별 화면에서 보상 청구하기를 눌러 이동해 주세요.')
@@ -220,20 +290,27 @@ export function AgencyCompensationPage() {
       return
     }
 
+    if (vehicleYear.trim() && (!Number.isFinite(parsedVehicleYear) || parsedVehicleYear < 1900)) {
+      setNotice('차량 연식은 1900년 이후 숫자로 입력해 주세요.')
+      return
+    }
+
     setIsCreatingClaim(true)
     setNotice('')
 
     try {
       const createdClaim = await createClaimDraft({
         reportId,
+        incidentAt: toApiDateTime(incidentAt),
+        incidentType: incidentType.trim() || undefined,
         damageDescription: damageDescription.trim(),
         estimatedCost: parsedEstimatedCost,
         vehicleInfo: {
-          plateNumber: vehicleInfo.plateNumber,
-          model: vehicleInfo.model,
-          year: vehicleInfo.year,
-          insuranceCompany: vehicleInfo.insuranceCompany,
-          phone: vehicleInfo.phone,
+          model: vehicleModel.trim() || undefined,
+          plateNumber: vehiclePlateNumber.trim() || undefined,
+          year: Number.isFinite(parsedVehicleYear) ? parsedVehicleYear : undefined,
+          insurer: insurer.trim() || undefined,
+          contact: contact.trim() || undefined,
         },
       })
 
@@ -254,6 +331,11 @@ export function AgencyCompensationPage() {
       return
     }
 
+    if (!isDraftClaim) {
+      setNotice('이미 제출된 청구에는 첨부 파일을 추가할 수 없습니다.')
+      return
+    }
+
     if (!attachmentFile) {
       setNotice('업로드할 첨부 파일을 선택해 주세요.')
       return
@@ -263,12 +345,19 @@ export function AgencyCompensationPage() {
     setNotice('')
 
     try {
-      const updatedClaim = await uploadClaimAttachment({
+      const uploadedAttachment = await uploadClaimAttachment({
         claimId,
         attachmentType,
         file: attachmentFile,
       })
-      setClaim(updatedClaim)
+
+      try {
+        const refreshedClaim = await getClaim(claimId)
+        setClaim(refreshedClaim)
+      } catch {
+        setClaim((currentClaim) => mergeUploadedAttachment(currentClaim, uploadedAttachment))
+      }
+
       setAttachmentFile(null)
       setNotice('첨부 파일이 업로드되었습니다.')
     } catch (error) {
@@ -282,6 +371,11 @@ export function AgencyCompensationPage() {
   const handleSubmitClaim = async () => {
     if (!claimId) {
       setNotice('먼저 보상 청구 초안을 생성해 주세요.')
+      return
+    }
+
+    if (!isDraftClaim) {
+      setNotice('이미 제출된 청구입니다.')
       return
     }
 
@@ -314,8 +408,10 @@ export function AgencyCompensationPage() {
       const pdfUrl = URL.createObjectURL(pdfBlob)
       const link = document.createElement('a')
       link.href = pdfUrl
-      link.download = `pothole-claim-${claimId}.pdf`
+      link.download = `claim_${claimId}.pdf`
+      document.body.appendChild(link)
       link.click()
+      link.remove()
       URL.revokeObjectURL(pdfUrl)
       setNotice('문서 다운로드를 시작했습니다.')
     } catch (error) {
@@ -397,7 +493,7 @@ export function AgencyCompensationPage() {
               {[
                 { label: '시도', value: agencyLookupResult.province },
                 { label: '구청', value: agencyLookupResult.districtOffice },
-                { label: '도로관리기관', value: agencyLookupResult.roadManagementAgency },
+                { label: '도로관리기관', value: claim?.managingAuthority ?? agencyLookupResult.roadManagementAgency },
               ].map((item) => (
                 <div key={item.label} className="border-b border-slate-200 px-5 py-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
                   <p className="text-[12px] font-black text-slate-400">{item.label}</p>
@@ -553,7 +649,7 @@ export function AgencyCompensationPage() {
           </div>
           <div className="mt-3 rounded-xl border border-slate-200 px-4 py-3">
             <p className="text-[12px] font-black text-slate-400">연락처</p>
-            <p className="mt-1 text-[13px] font-black text-slate-700">{vehicleInfo.phone}</p>
+            <p className="mt-1 text-[13px] font-black text-slate-700">{claim?.contact ?? contact}</p>
           </div>
         </section>
 
@@ -563,9 +659,14 @@ export function AgencyCompensationPage() {
               <h3 className="text-[18px] font-black text-[#07182F]">청구 서류 체크리스트 & 미리보기</h3>
               <p className="mt-1 text-[12px] font-semibold text-slate-500">청구서 초안 생성에 필요한 자료를 정리합니다.</p>
             </div>
-            <button type="button" onClick={() => setNotice('서식 다운로드는 데모 화면입니다. 실제 파일은 생성되지 않습니다.')} className="flex h-9 w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-slate-600 transition hover:bg-blue-50">
+            <button
+              type="button"
+              onClick={claimId ? handleDownloadPdf : () => setNotice('먼저 보상 청구 초안을 생성해 주세요.')}
+              disabled={isDownloadingPdf}
+              className="flex h-9 w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-slate-600 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
               <Download size={15} aria-hidden="true" />
-              서식 다운로드
+              {isDownloadingPdf ? '준비 중' : '서식 다운로드'}
             </button>
           </div>
 
@@ -582,6 +683,33 @@ export function AgencyCompensationPage() {
                   청구 번호 {claimId}
                 </span>
               )}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="claim-incident-at" className="text-[12px] font-black text-slate-600">
+                  사고 일시
+                </label>
+                <input
+                  id="claim-incident-at"
+                  type="datetime-local"
+                  value={incidentAt}
+                  onChange={(event) => setIncidentAt(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+              <div>
+                <label htmlFor="claim-incident-type" className="text-[12px] font-black text-slate-600">
+                  사고 유형
+                </label>
+                <input
+                  id="claim-incident-type"
+                  value={incidentType}
+                  onChange={(event) => setIncidentType(event.target.value)}
+                  maxLength={30}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
             </div>
 
             <div className="mt-4 grid gap-3">
@@ -619,6 +747,69 @@ export function AgencyCompensationPage() {
               </button>
             </div>
 
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="claim-vehicle-model" className="text-[12px] font-black text-slate-600">
+                  차종/모델명
+                </label>
+                <input
+                  id="claim-vehicle-model"
+                  value={vehicleModel}
+                  onChange={(event) => setVehicleModel(event.target.value)}
+                  maxLength={100}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+              <div>
+                <label htmlFor="claim-vehicle-plate" className="text-[12px] font-black text-slate-600">
+                  차량 번호
+                </label>
+                <input
+                  id="claim-vehicle-plate"
+                  value={vehiclePlateNumber}
+                  onChange={(event) => setVehiclePlateNumber(event.target.value)}
+                  maxLength={20}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+              <div>
+                <label htmlFor="claim-vehicle-year" className="text-[12px] font-black text-slate-600">
+                  연식
+                </label>
+                <input
+                  id="claim-vehicle-year"
+                  inputMode="numeric"
+                  value={vehicleYear}
+                  onChange={(event) => setVehicleYear(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+              <div>
+                <label htmlFor="claim-insurer" className="text-[12px] font-black text-slate-600">
+                  보험사
+                </label>
+                <input
+                  id="claim-insurer"
+                  value={insurer}
+                  onChange={(event) => setInsurer(event.target.value)}
+                  maxLength={50}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="claim-contact" className="text-[12px] font-black text-slate-600">
+                  연락처
+                </label>
+                <input
+                  id="claim-contact"
+                  value={contact}
+                  onChange={(event) => setContact(event.target.value)}
+                  maxLength={30}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
             <div className="mt-4 grid gap-3 sm:grid-cols-[130px_minmax(0,1fr)_126px]">
               <div>
                 <label htmlFor="claim-attachment-type" className="text-[12px] font-black text-slate-600">
@@ -627,13 +818,14 @@ export function AgencyCompensationPage() {
                 <select
                   id="claim-attachment-type"
                   value={attachmentType}
-                  onChange={(event) => setAttachmentType(event.target.value)}
+                  onChange={(event) => setAttachmentType(event.target.value as ClaimAttachmentType)}
                   className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                 >
-                  <option value="damage_photo">피해 사진</option>
-                  <option value="repair_estimate">수리 견적서</option>
-                  <option value="vehicle_document">차량 서류</option>
-                  <option value="etc">기타 자료</option>
+                  {attachmentTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -650,10 +842,10 @@ export function AgencyCompensationPage() {
               <button
                 type="button"
                 onClick={handleUploadAttachment}
-                disabled={isUploadingAttachment}
+                disabled={isUploadingAttachment || !isDraftClaim}
                 className="mt-auto h-10 rounded-lg border border-blue-200 bg-white px-3 text-[12px] font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isUploadingAttachment ? '업로드 중' : '업로드'}
+                {isUploadingAttachment ? '업로드 중' : isDraftClaim ? '업로드' : '업로드 불가'}
               </button>
             </div>
 
@@ -661,10 +853,10 @@ export function AgencyCompensationPage() {
               <button
                 type="button"
                 onClick={handleSubmitClaim}
-                disabled={isSubmittingClaim}
+                disabled={isSubmittingClaim || !isDraftClaim}
                 className="h-10 rounded-lg bg-slate-900 px-4 text-[13px] font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSubmittingClaim ? '제출 중' : '청구 제출'}
+                {isSubmittingClaim ? '제출 중' : isDraftClaim ? '청구 제출' : '제출 완료'}
               </button>
               <button
                 type="button"
@@ -675,11 +867,84 @@ export function AgencyCompensationPage() {
                 {isDownloadingPdf ? '다운로드 준비 중' : '문서 다운로드'}
               </button>
             </div>
+
+            {claim && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-[11px] font-black text-slate-400">예상 보상금</p>
+                    <p className="mt-1 text-[15px] font-black text-blue-700">
+                      {formatCurrency(claim.estimatedCompensation)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black text-slate-400">관할기관</p>
+                    <p className="mt-1 text-[13px] font-black text-slate-700">
+                      {claim.managingAuthority ?? agencyLookupResult.roadManagementAgency}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black text-slate-400">청구 상태</p>
+                    <p className="mt-1 text-[13px] font-black text-slate-700">{displayClaimStatus}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black text-slate-400">평균 처리 소요</p>
+                    <p className="mt-1 text-[13px] font-black text-slate-700">
+                      {claim.averageProcessingDays ? `${claim.averageProcessingDays}일` : '-'}
+                    </p>
+                  </div>
+                </div>
+
+                {claim.requiredDocs && claim.requiredDocs.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-[12px] font-black text-slate-600">필요 서류</p>
+                    <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {claim.requiredDocs.map((doc) => (
+                        <li key={doc} className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] font-bold text-slate-600">
+                          {doc}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {claim.document && (
+                  <div className="mt-4">
+                    <p className="text-[12px] font-black text-slate-600">자동 생성 청구서</p>
+                    <pre className="mt-2 max-h-[180px] overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 px-3 py-3 text-[12px] font-semibold leading-5 text-slate-700">
+                      {claim.document}
+                    </pre>
+                  </div>
+                )}
+
+                {claim.attachments && claim.attachments.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-[12px] font-black text-slate-600">업로드된 첨부</p>
+                    <ul className="mt-2 space-y-2">
+                      {claim.attachments.map((attachment, index) => (
+                        <li
+                          key={`${attachment.id ?? attachment.originalName ?? 'attachment'}-${index}`}
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] font-bold text-slate-600"
+                        >
+                          {attachment.originalName ?? '첨부 파일'} · {attachment.attachmentType ?? 'OTHER'}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {claim.disclaimer && (
+                  <p className="mt-4 rounded-lg bg-blue-50 px-3 py-2 text-[12px] font-bold leading-5 text-blue-700">
+                    {claim.disclaimer}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_170px]">
             <ul className="space-y-3">
-              {claimChecklistItems.map((item) => {
+              {displayChecklistItems.map((item) => {
                 const complete = item.status === '완료'
 
                 return (
@@ -733,10 +998,10 @@ export function AgencyCompensationPage() {
           <button
             type="button"
             onClick={handleSubmitClaim}
-            disabled={isSubmittingClaim}
+            disabled={isSubmittingClaim || !isDraftClaim}
             className="mt-4 h-11 w-full rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[15px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(0,95,220,0.25)] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
           >
-            {isSubmittingClaim ? '제출 중' : '서류 검토 및 제출하기'}
+            {isSubmittingClaim ? '제출 중' : isDraftClaim ? '서류 검토 및 제출하기' : '제출 완료'}
           </button>
         </section>
       </div>
