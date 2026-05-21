@@ -1,4 +1,4 @@
-import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useState } from 'react'
+import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import {
   Calendar,
   CheckCircle2,
@@ -779,10 +779,11 @@ export function CitizenReportPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const preservePreviewUrlRef = useRef(false)
 
   useEffect(() => {
     return () => {
-      if (previewUrl) {
+      if (previewUrl && !preservePreviewUrlRef.current) {
         URL.revokeObjectURL(previewUrl)
       }
     }
@@ -800,6 +801,8 @@ export function CitizenReportPage() {
         return
       }
 
+      preservePreviewUrlRef.current = false
+
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl)
       }
@@ -811,6 +814,8 @@ export function CitizenReportPage() {
   }
 
   const handleClearFile = () => {
+    preservePreviewUrlRef.current = false
+
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl)
     }
@@ -853,7 +858,11 @@ export function CitizenReportPage() {
         return
       }
 
-      navigate(`/report/ai-review?reportId=${encodeURIComponent(reportId)}`)
+      preservePreviewUrlRef.current = Boolean(previewUrl)
+
+      navigate(`/report/ai-review?reportId=${encodeURIComponent(reportId)}`, {
+        state: previewUrl ? { reportId, localImageUrl: previewUrl } : undefined,
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
       setSubmitError(`백엔드 연결에 실패했습니다. 서버 실행 상태를 확인해 주세요. (${message})`)

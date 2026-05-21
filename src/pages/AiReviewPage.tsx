@@ -17,7 +17,7 @@ import {
   Upload,
   Waves,
 } from 'lucide-react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getApiBaseUrl } from '../api/apiClient'
 import { getCitizenReport } from '../api/reportApi'
 import {
@@ -77,7 +77,7 @@ const fallbackReviewData: AiReviewViewData = {
   confidence: aiReviewResult.confidence,
   resultLevel: aiReviewResult.resultLevel,
   description: aiReviewResult.description,
-  imageSources: aiReviewResult.imageSources,
+  imageSources: [],
   features: aiDetectedFeatures,
 }
 
@@ -230,6 +230,21 @@ function resolveReportImageUrl(imageUrl: string | undefined) {
 
   const normalizedPath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`
   return `${getApiBaseUrl()}${normalizedPath}`
+}
+
+function getLocalImageUrl(locationState: unknown, reportId: string) {
+  if (!isRecord(locationState)) {
+    return undefined
+  }
+
+  const stateReportId = locationState.reportId
+  const localImageUrl = locationState.localImageUrl
+
+  if (typeof stateReportId === 'string' && stateReportId !== reportId) {
+    return undefined
+  }
+
+  return typeof localImageUrl === 'string' && localImageUrl.trim() ? localImageUrl : undefined
 }
 
 function buildAgencyLabel(agency: ReportAgencyResult | undefined) {
@@ -408,7 +423,7 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
       getString(aiRecord, ['description', 'summary', 'message']) ??
       report.description ??
       (detected === false ? '포트홀로 보기 어려운 신고입니다.' : '백엔드에서 받은 인공지능 분석 결과입니다.'),
-    imageSources: imageUrl ? [imageUrl, ...aiReviewResult.imageSources] : aiReviewResult.imageSources,
+    imageSources: imageUrl ? [imageUrl] : [],
     features,
   }
 }
@@ -431,35 +446,13 @@ function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
   )
 }
 
-function FallbackRoadImage({ compact = false }: { compact?: boolean }) {
+function BlankImageSpace({ compact = false }: { compact?: boolean }) {
   return (
     <div
       role="img"
-      aria-label={compact ? '최근 AI 판별 포트홀 사진 대체 이미지' : 'AI가 분석한 포트홀 사진 대체 이미지'}
-      className="relative h-full w-full overflow-hidden bg-slate-900"
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_72%,#525252_0%,#343434_34%,#181818_58%,#0f172a_100%)]" />
-      <div className="absolute inset-x-0 top-0 h-[44%] bg-gradient-to-b from-slate-500/80 via-slate-500/40 to-transparent blur-[2px]" />
-      <div className="absolute left-[-16%] top-[31%] h-[17%] w-[138%] rotate-[-7deg] bg-slate-700/80" />
-      <div className="absolute left-[-14%] top-[69%] h-[25%] w-[138%] rotate-[6deg] bg-slate-800/90" />
-      <div className="absolute right-[7%] top-[33%] h-[4%] w-[60%] rotate-[-7deg] rounded-full bg-yellow-400/75 blur-[1px]" />
-      <div className="absolute left-1/2 top-[52%] h-[33%] w-[55%] -translate-x-1/2 rounded-[50%] bg-slate-950 shadow-[inset_0_20px_34px_rgba(0,0,0,0.8)]" />
-      <div className="absolute left-1/2 top-[58%] h-[19%] w-[33%] -translate-x-1/2 rounded-[50%] bg-slate-500/70 blur-sm" />
-      {!compact && (
-        <div className="absolute bottom-4 right-4 rounded-full bg-white/90 px-3 py-1 text-[11px] font-black text-slate-600 shadow-sm">
-          데모 이미지
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AnalysisDetectionOverlay() {
-  return (
-    <div className="pointer-events-none absolute left-1/2 top-[52%] h-[34%] w-[56%] -translate-x-1/2 rounded-[48%_52%_43%_57%] border-[3px] border-blue-500 bg-blue-500/30 shadow-[0_0_42px_rgba(37,99,235,0.75)]">
-      <div className="absolute inset-0 rounded-[48%_52%_43%_57%] bg-[linear-gradient(90deg,rgba(255,255,255,0.18)_1px,transparent_1px),linear-gradient(rgba(255,255,255,0.16)_1px,transparent_1px)] bg-[size:12px_12px]" />
-      <div className="absolute left-[18%] top-[24%] h-[48%] w-[58%] rounded-[50%] bg-blue-300/30 blur-sm" />
-    </div>
+      aria-label={compact ? '최근 판별 이미지 없음' : '업로드 이미지 없음'}
+      className={cn('h-full w-full bg-slate-50', compact && 'rounded-lg')}
+    />
   )
 }
 
@@ -471,6 +464,7 @@ function UploadedPhotoPanel({
   onNotice: (message: string) => void
 }) {
   const navigate = useNavigate()
+  const hasImage = review.imageSources.length > 0
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_16px_44px_rgba(15,40,70,0.07)] sm:p-4">
@@ -478,15 +472,14 @@ function UploadedPhotoPanel({
         업로드 사진 분석 결과
       </h2>
 
-      <div className="relative h-[280px] overflow-hidden rounded-xl bg-slate-900 shadow-inner sm:h-[360px] xl:h-[390px]">
+      <div className="relative h-[280px] overflow-hidden rounded-xl bg-slate-50 shadow-inner sm:h-[360px] xl:h-[390px]">
         <AssetImage
+          key={review.imageSources.join('|') || 'empty-upload-image'}
           sources={review.imageSources}
           alt="AI가 분석한 포트홀 사진"
           className="h-full w-full object-cover"
-          fallback={<FallbackRoadImage />}
+          fallback={<BlankImageSpace />}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/45" />
-        <AnalysisDetectionOverlay />
 
         <div className="absolute inset-x-3 top-3 flex flex-col gap-2 sm:inset-x-5 sm:top-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-full truncate rounded-lg bg-black/55 px-3 py-2 text-[12px] font-bold text-white backdrop-blur sm:w-fit sm:px-4 sm:text-[13px]">
@@ -494,7 +487,7 @@ function UploadedPhotoPanel({
           </div>
           <button
             type="button"
-            onClick={() => onNotice('원본 보기 기능은 데모 화면에서만 표시됩니다.')}
+            onClick={() => onNotice(hasImage ? '현재 업로드된 원본 이미지를 표시 중입니다.' : '표시할 원본 이미지가 없습니다.')}
             className="flex h-10 w-fit items-center gap-2 rounded-lg bg-white/95 px-4 text-[13px] font-black text-slate-800 shadow-md transition hover:bg-blue-50"
           >
             원본 보기
@@ -732,7 +725,7 @@ function RecommendedActions({
       </div>
 
       <p className="mt-4 text-[12px] font-semibold tracking-[-0.03em] text-slate-500">
-        신고 확정 시 데모 흐름에서는 관할기관 안내 · 보상 청구 화면으로 이동합니다.
+        신고 확정 시 관할기관 안내 · 보상 청구 화면으로 이동합니다.
       </p>
       {notice && (
         <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-[12px] font-bold text-blue-700" aria-live="polite">
@@ -812,10 +805,11 @@ function RecentResultItem({ item, index }: { item: RecentAiResult; index: number
     >
       <div className="h-[66px] w-[76px] overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
         <AssetImage
-          sources={item.thumbnailSources}
+          key={`empty-recent-${item.id}`}
+          sources={[]}
           alt={`${item.location} AI 판별 결과 사진`}
           className="h-full w-full object-cover"
-          fallback={<FallbackRoadImage compact />}
+          fallback={<BlankImageSpace compact />}
         />
       </div>
 
@@ -876,7 +870,9 @@ function RecentResultsPanel({ onNotice }: { onNotice: (message: string) => void 
 
 export function AiReviewPage() {
   const [searchParams] = useSearchParams()
+  const location = useLocation()
   const reportId = searchParams.get('reportId') ?? ''
+  const localImageUrl = getLocalImageUrl(location.state, reportId)
   const [notice, setNotice] = useState('')
   const [reportLoadState, setReportLoadState] = useState<ReportLoadState>({
     reportId: '',
@@ -901,10 +897,17 @@ export function AiReviewPage() {
     getCitizenReport(reportId)
       .then((report) => {
         if (!isActive) return
+        const reportReviewData = mapReportToReviewData(report)
 
         setReportLoadState({
           reportId,
-          reviewData: mapReportToReviewData(report),
+          reviewData: {
+            ...reportReviewData,
+            imageSources: [
+              ...(localImageUrl ? [localImageUrl] : []),
+              ...reportReviewData.imageSources,
+            ],
+          },
           notice: '백엔드에서 불러온 실제 신고 분석 결과입니다.',
         })
       })
@@ -922,7 +925,7 @@ export function AiReviewPage() {
     return () => {
       isActive = false
     }
-  }, [reportId])
+  }, [localImageUrl, reportId])
 
   return (
     <div className="min-w-0">
