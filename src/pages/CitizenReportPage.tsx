@@ -5,7 +5,6 @@ import {
   ChevronRight,
   CloudUpload,
   FileText,
-  Image as ImageIcon,
   Info,
   Lock,
   MapPin,
@@ -138,23 +137,13 @@ function SectionTitle({ number, title, label }: SectionTitleProps) {
   )
 }
 
-function FallbackPotholeImage({ compact = false }: { compact?: boolean }) {
+function BlankPhotoSpace({ compact = false }: { compact?: boolean }) {
   return (
     <div
       role="img"
-      aria-label="신고된 포트홀 사진 미리보기"
-      className={cn('relative h-full w-full overflow-hidden bg-slate-300', compact && 'rounded-xl')}
-    >
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,#9ca3af,#e5e7eb_42%,#52525b)]" />
-      <div className="absolute left-[-18%] top-[38%] h-8 w-[140%] rotate-[-9deg] bg-slate-800/80" />
-      <div className="absolute left-[-12%] top-[65%] h-8 w-[130%] rotate-[13deg] bg-slate-700/80" />
-      <div className="absolute left-[27%] top-[28%] h-[40%] w-[48%] rounded-[50%] bg-slate-950 shadow-[inset_0_14px_24px_rgba(0,0,0,0.7)]" />
-      <div className="absolute left-[39%] top-[39%] h-[21%] w-[25%] rounded-[50%] bg-stone-400/90" />
-      <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black text-slate-600 shadow-sm">
-        <ImageIcon size={12} aria-hidden="true" />
-        데모
-      </div>
-    </div>
+      aria-label={compact ? '최근 신고 사진 없음' : '첨부 사진 없음'}
+      className={cn('h-full w-full bg-slate-50', compact && 'rounded-xl')}
+    />
   )
 }
 
@@ -186,8 +175,8 @@ function UploadedPreview({
   onClear,
 }: {
   previewUrl: string | null
-  fileName: string
-  fileSize: string
+  fileName: string | null
+  fileSize: string | null
   onClear: () => void
 }) {
   return (
@@ -196,25 +185,22 @@ function UploadedPreview({
         {previewUrl ? (
           <img src={previewUrl} alt="신고된 포트홀 사진 미리보기" className="h-full w-full object-cover" />
         ) : (
-          <AssetImage
-            sources={citizenReportMock.previewSources}
-            alt="신고된 포트홀 사진 미리보기"
-            className="h-full w-full object-cover"
-            fallback={<FallbackPotholeImage />}
-          />
+          <BlankPhotoSpace />
         )}
 
-        <button
-          type="button"
-          onClick={onClear}
-          aria-label="첨부 사진 제거"
-          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 shadow-md transition hover:bg-slate-50"
-        >
-          <X size={17} aria-hidden="true" />
-        </button>
+        {previewUrl && (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label="첨부 사진 제거"
+            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500 shadow-md transition hover:bg-slate-50"
+          >
+            <X size={17} aria-hidden="true" />
+          </button>
+        )}
       </div>
-      <p className="mt-3 text-[14px] font-black text-slate-700">{fileName}</p>
-      <p className="mt-1 text-[12px] font-semibold text-slate-500">{fileSize}</p>
+      {fileName && <p className="mt-3 text-[14px] font-black text-slate-700">{fileName}</p>}
+      {fileSize && <p className="mt-1 text-[12px] font-semibold text-slate-500">{fileSize}</p>}
     </div>
   )
 }
@@ -227,8 +213,8 @@ function PhotoSection({
   onClearFile,
 }: {
   previewUrl: string | null
-  fileName: string
-  fileSize: string
+  fileName: string | null
+  fileSize: string | null
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void
   onClearFile: () => void
 }) {
@@ -497,8 +483,8 @@ function ReportForm({
   address: string
   locationDetail: string
   previewUrl: string | null
-  fileName: string
-  fileSize: string
+  fileName: string | null
+  fileSize: string | null
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void
   onClearFile: () => void
   onRiskTypeChange: (riskType: string) => void
@@ -710,18 +696,11 @@ function AiGuideCard() {
   )
 }
 
-function RecentThumbnail({ report }: { report: RecentCitizenReport }) {
+function RecentThumbnail() {
   return (
-    <AssetImage
-      sources={report.thumbnailSources}
-      alt={`${report.title} 최근 신고 사진`}
-      className="h-[72px] w-[78px] rounded-xl object-cover"
-      fallback={
-        <div className="h-[72px] w-[78px] overflow-hidden rounded-xl">
-          <FallbackPotholeImage compact />
-        </div>
-      }
-    />
+    <div className="h-[72px] w-[78px] overflow-hidden rounded-xl border border-slate-100 bg-slate-50">
+      <BlankPhotoSpace compact />
+    </div>
   )
 }
 
@@ -743,7 +722,7 @@ function RecentReportItem({ report }: { report: RecentCitizenReport }) {
         </p>
       </div>
 
-      <RecentThumbnail report={report} />
+      <RecentThumbnail />
     </article>
   )
 }
@@ -871,8 +850,8 @@ export function CitizenReportPage() {
     }
   }
 
-  const fileName = selectedFile?.name ?? citizenReportMock.uploadedFileName
-  const fileSize = selectedFile ? formatFileSize(selectedFile) : citizenReportMock.uploadedFileSize
+  const fileName = selectedFile?.name ?? null
+  const fileSize = selectedFile ? formatFileSize(selectedFile) : null
 
   return (
     <div className="min-w-0">

@@ -40,9 +40,9 @@ import type {
 } from '../types'
 
 export const citizenReportMock: CitizenReportMock = {
-  uploadedFileName: 'IMG_20240524_102358.jpg',
-  uploadedFileSize: '1.2MB',
-  previewSources: ['/assets/report/report-pothole-preview.webp', '/assets/report/report-pothole-preview.png'],
+  uploadedFileName: '',
+  uploadedFileSize: '',
+  previewSources: [],
   mapSources: ['/assets/report/report-location-map.webp', '/assets/report/report-location-map.png'],
   address: '서울특별시 서초구 양재천로 123',
   detailLocationPlaceholder: '건물명, 도로명, 방향, 주변 시설 등 상세 정보를 입력하세요.',
@@ -101,12 +101,7 @@ export const aiReviewResult: AiReviewResult = {
   confidence: 96,
   resultLevel: '매우 높음',
   description: '포트홀로 판단될 가능성이 매우 높습니다.',
-  imageSources: [
-    '/assets/ai-review/ai-review-main.webp',
-    '/assets/ai-review/ai-review-main.png',
-    '/assets/report/report-pothole-preview.webp',
-    '/assets/report/report-pothole-preview.png',
-  ],
+  imageSources: [],
 }
 
 export const aiDetectedFeatures: AiDetectedFeature[] = [
@@ -220,14 +215,7 @@ export const aiRecommendedActions: AiRecommendedAction[] = [
 export const recentAiResults: RecentAiResult[] = [
   {
     id: 'recent-ai-1',
-    thumbnailSources: [
-      '/assets/ai-review/recent-ai-1.webp',
-      '/assets/ai-review/recent-ai-1.png',
-      '/assets/ai-review/ai-review-main.webp',
-      '/assets/ai-review/ai-review-main.png',
-      '/assets/report/report-pothole-preview.webp',
-      '/assets/report/report-pothole-preview.png',
-    ],
+    thumbnailSources: [],
     percent: 96,
     level: '매우 높음',
     location: '서울 강남구 테헤란로 123',
@@ -235,14 +223,7 @@ export const recentAiResults: RecentAiResult[] = [
   },
   {
     id: 'recent-ai-2',
-    thumbnailSources: [
-      '/assets/ai-review/recent-ai-2.webp',
-      '/assets/ai-review/recent-ai-2.png',
-      '/assets/ai-review/ai-review-main.webp',
-      '/assets/ai-review/ai-review-main.png',
-      '/assets/report/report-pothole-preview.webp',
-      '/assets/report/report-pothole-preview.png',
-    ],
+    thumbnailSources: [],
     percent: 78,
     level: '높음',
     location: '서울 서초구 반포대로 45',
@@ -250,14 +231,7 @@ export const recentAiResults: RecentAiResult[] = [
   },
   {
     id: 'recent-ai-3',
-    thumbnailSources: [
-      '/assets/ai-review/recent-ai-3.webp',
-      '/assets/ai-review/recent-ai-3.png',
-      '/assets/ai-review/ai-review-main.webp',
-      '/assets/ai-review/ai-review-main.png',
-      '/assets/report/report-pothole-preview.webp',
-      '/assets/report/report-pothole-preview.png',
-    ],
+    thumbnailSources: [],
     percent: 42,
     level: '보통',
     location: '서울 송파구 올림픽로 300',
@@ -265,14 +239,7 @@ export const recentAiResults: RecentAiResult[] = [
   },
   {
     id: 'recent-ai-4',
-    thumbnailSources: [
-      '/assets/ai-review/recent-ai-4.webp',
-      '/assets/ai-review/recent-ai-4.png',
-      '/assets/ai-review/ai-review-main.webp',
-      '/assets/ai-review/ai-review-main.png',
-      '/assets/report/report-pothole-preview.webp',
-      '/assets/report/report-pothole-preview.png',
-    ],
+    thumbnailSources: [],
     percent: 12,
     level: '낮음',
     location: '서울 강동구 천호대로 89',
@@ -287,7 +254,7 @@ export const recentCitizenReports: RecentCitizenReport[] = [
     title: '포트홀 (도로 파임)',
     location: '강남구 테헤란로 123',
     date: '2024-05-24 10:23',
-    thumbnailSources: ['/assets/report/recent-report-1.webp', '/assets/report/recent-report-1.png'],
+    thumbnailSources: [],
     statusColor: 'orange',
   },
   {
@@ -296,7 +263,7 @@ export const recentCitizenReports: RecentCitizenReport[] = [
     title: '균열 (도로 갈라짐)',
     location: '서초구 효령로 256',
     date: '2024-05-23 14:56',
-    thumbnailSources: ['/assets/report/recent-report-2.webp', '/assets/report/recent-report-2.png'],
+    thumbnailSources: [],
     statusColor: 'blue',
   },
   {
@@ -305,7 +272,7 @@ export const recentCitizenReports: RecentCitizenReport[] = [
     title: '포트홀 (도로 파임)',
     location: '송파구 올림픽로 45',
     date: '2024-05-22 10:18',
-    thumbnailSources: ['/assets/report/recent-report-3.webp', '/assets/report/recent-report-3.png'],
+    thumbnailSources: [],
     statusColor: 'green',
   },
   {
@@ -314,7 +281,7 @@ export const recentCitizenReports: RecentCitizenReport[] = [
     title: '침하 (도로 침하)',
     location: '강동구 올림픽로 98',
     date: '2024-05-20 16:40',
-    thumbnailSources: ['/assets/report/recent-report-4.webp', '/assets/report/recent-report-4.png'],
+    thumbnailSources: [],
     statusColor: 'cyan',
   },
 ]
