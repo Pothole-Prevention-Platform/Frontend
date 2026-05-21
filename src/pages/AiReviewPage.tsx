@@ -56,8 +56,8 @@ const iconMap: Record<AiReviewIconName, ElementType> = {
 type AiReviewViewData = {
   capturedAt: string
   location: string
-  potholeProbability: number
-  confidence: number
+  potholeProbability: number | null
+  confidence: number | null
   resultLevel: string
   description: string
   imageSources: string[]
@@ -79,6 +79,41 @@ const fallbackReviewData: AiReviewViewData = {
   description: aiReviewResult.description,
   imageSources: [],
   features: aiDetectedFeatures,
+}
+
+function createPendingReviewData(localImageUrl: string | undefined): AiReviewViewData {
+  return {
+    capturedAt: '불러오는 중',
+    location: '신고 위치 확인 중',
+    potholeProbability: null,
+    confidence: null,
+    resultLevel: '분석 대기',
+    description: '신고 분석 결과를 불러오는 중입니다.',
+    imageSources: localImageUrl ? [localImageUrl] : [],
+    features: [
+      {
+        id: 'detected',
+        label: '포트홀 감지',
+        value: '분석 대기',
+        severity: 'normal',
+        iconName: 'crosshair',
+      },
+      {
+        id: 'confidence',
+        label: '신뢰도',
+        value: '분석 대기',
+        severity: 'normal',
+        iconName: 'shield',
+      },
+      {
+        id: 'severity',
+        label: '위험도',
+        value: '분석 대기',
+        severity: 'normal',
+        iconName: 'alertTriangle',
+      },
+    ],
+  }
 }
 
 const aiSeverityLabels: Record<string, string> = {
@@ -179,8 +214,9 @@ function optionalString(value: string | null | undefined) {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
 
-function formatSeverity(severity: string | undefined, percent: number) {
+function formatSeverity(severity: string | undefined, percent: number | null) {
   if (!severity) {
+    if (percent === null) return '분석 대기'
     if (percent >= 90) return '매우 높음'
     if (percent >= 70) return '높음'
     if (percent >= 40) return '보통'
@@ -278,12 +314,12 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
     (typeof report.isPothole === 'boolean' ? report.isPothole : undefined)
   const confidenceValue =
     getNumber(aiRecord, ['confidence', 'score', 'probability', 'potholeProbability']) ??
-    optionalNumber(report.confidence) ??
-    0
-  const confidence = normalizePercent(confidenceValue)
-  const potholeProbability = normalizePercent(
-    getNumber(aiRecord, ['potholeProbability', 'probability', 'confidence', 'score']) ?? confidence,
-  )
+    optionalNumber(report.confidence)
+  const potholeProbabilityValue =
+    getNumber(aiRecord, ['potholeProbability', 'probability', 'confidence', 'score']) ?? confidenceValue
+  const confidence = confidenceValue === undefined ? null : normalizePercent(confidenceValue)
+  const potholeProbability =
+    potholeProbabilityValue === undefined ? null : normalizePercent(potholeProbabilityValue)
   const severity = getString(aiRecord, ['severity', 'riskLevel', 'level']) ?? optionalString(report.severity)
   const riskScore = getNumber(aiRecord, ['riskScore']) ?? optionalNumber(report.riskScore)
   const estimatedSizeCm =
@@ -302,28 +338,40 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
   const detectedText = formatDetected(detected)
   const location = [optionalString(report.address), optionalString(report.locationDetail)].filter(Boolean).join(' · ')
   const capturedAt = optionalString(report.submittedAt) ?? report.createdAt ?? report.reportedAt ?? fallbackReviewData.capturedAt
+  const hasAiAnalysis =
+    detected !== undefined ||
+    confidence !== null ||
+    potholeProbability !== null ||
+    severity !== undefined ||
+    riskScore !== undefined ||
+    estimatedSizeCm !== undefined ||
+    cracks !== undefined ||
+    depthMinCm !== undefined ||
+    depthMaxCm !== undefined ||
+    shape !== undefined ||
+    bbox !== undefined
 
   const features: AiDetectedFeature[] = [
     {
       id: 'detected',
       label: '포트홀 감지',
-      value: detectedText ?? '분석 결과 확인 중',
-      severity: detected === false ? 'normal' : 'danger',
+      value: detectedText ?? (hasAiAnalysis ? '분석 결과 확인 중' : '분석 대기'),
+      severity: detected === true ? 'danger' : 'normal',
       iconName: 'crosshair',
     },
     {
       id: 'confidence',
       label: '신뢰도',
-      value: `${confidence}%`,
-      score: Math.max(1, Math.ceil(confidence / 20)),
-      severity: confidence >= 70 ? 'warning' : 'normal',
+      value: confidence === null ? '분석 대기' : `${confidence}%`,
+      score: confidence === null ? undefined : Math.max(1, Math.ceil(confidence / 20)),
+      severity: confidence !== null && confidence >= 70 ? 'warning' : 'normal',
       iconName: 'shield',
     },
     {
       id: 'severity',
       label: '위험도',
       value: resultLevel,
-      severity: potholeProbability >= 70 ? 'danger' : 'warning',
+      severity: potholeProbability !== null && potholeProbability >= 70 ? 'danger' : 'normal',
       iconName: 'alertTriangle',
     },
   ]
@@ -422,7 +470,11 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
     description:
       getString(aiRecord, ['description', 'summary', 'message']) ??
       report.description ??
-      (detected === false ? '포트홀로 보기 어려운 신고입니다.' : '백엔드에서 받은 인공지능 분석 결과입니다.'),
+      (!hasAiAnalysis
+        ? 'AI 분석 결과가 아직 도착하지 않았습니다. 잠시 후 다시 확인해 주세요.'
+        : detected === false
+          ? '포트홀로 보기 어려운 신고입니다.'
+          : '백엔드에서 받은 인공지능 분석 결과입니다.'),
     imageSources: imageUrl ? [imageUrl] : [],
     features,
   }
@@ -513,10 +565,11 @@ function UploadedPhotoPanel({
   )
 }
 
-function ConfidenceGauge({ value }: { value: number }) {
+function ConfidenceGauge({ value }: { value: number | null }) {
   const radius = 55
   const circumference = 2 * Math.PI * radius
-  const dashOffset = circumference * (1 - value / 100)
+  const percentValue = value ?? 0
+  const dashOffset = circumference * (1 - percentValue / 100)
 
   return (
     <div className="flex h-full min-h-[190px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-5">
@@ -548,11 +601,13 @@ function ConfidenceGauge({ value }: { value: number }) {
         </svg>
 
         <span className="relative text-[32px] font-black tracking-[-0.05em] text-[#07182F]">
-          {value}%
+          {value === null ? '대기' : `${value}%`}
         </span>
       </div>
 
-      <p className="mt-2 text-[13px] font-bold text-slate-600">높은 신뢰도</p>
+      <p className="mt-2 text-[13px] font-bold text-slate-600">
+        {value === null ? '분석 대기' : '높은 신뢰도'}
+      </p>
     </div>
   )
 }
@@ -570,12 +625,20 @@ function ResultCard({ review }: { review: AiReviewViewData }) {
             포트홀 가능성
           </p>
 
-          <div className="mt-3 flex items-end gap-2">
-            <span className="text-[72px] font-black leading-none tracking-[-0.06em] text-blue-700">
-              {review.potholeProbability}
-            </span>
-            <span className="mb-2 text-[34px] font-black text-blue-700">%</span>
-          </div>
+          {review.potholeProbability === null ? (
+            <div className="mt-5 flex min-h-[78px] items-center">
+              <span className="text-[42px] font-black leading-none tracking-[-0.05em] text-blue-700">
+                분석 대기
+              </span>
+            </div>
+          ) : (
+            <div className="mt-3 flex items-end gap-2">
+              <span className="text-[72px] font-black leading-none tracking-[-0.06em] text-blue-700">
+                {review.potholeProbability}
+              </span>
+              <span className="mb-2 text-[34px] font-black text-blue-700">%</span>
+            </div>
+          )}
 
           <span className="mt-3 inline-flex rounded-full bg-blue-100 px-4 py-1 text-[13px] font-black text-blue-700">
             {review.resultLevel}
@@ -880,7 +943,9 @@ export function AiReviewPage() {
     notice: '',
   })
   const currentReportLoadState = reportLoadState.reportId === reportId ? reportLoadState : null
-  const review = currentReportLoadState?.reviewData ?? fallbackReviewData
+  const review =
+    currentReportLoadState?.reviewData ??
+    (reportId && !currentReportLoadState ? createPendingReviewData(localImageUrl) : fallbackReviewData)
   const displayApiNotice = reportId
     ? currentReportLoadState?.notice ?? '신고 분석 결과를 불러오는 중입니다.'
     : '신고 번호가 없어 데모 분석 결과를 표시합니다.'
