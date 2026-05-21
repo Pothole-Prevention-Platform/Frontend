@@ -62,6 +62,7 @@ type AiReviewViewData = {
   description: string
   imageSources: string[]
   features: AiDetectedFeature[]
+  isAnalysisPending: boolean
 }
 
 type ReportLoadState = {
@@ -69,6 +70,9 @@ type ReportLoadState = {
   reviewData: AiReviewViewData | null
   notice: string
 }
+
+const AI_RESULT_POLL_INTERVAL_MS = 3000
+const AI_RESULT_MAX_POLL_ATTEMPTS = 12
 
 const fallbackReviewData: AiReviewViewData = {
   capturedAt: aiReviewResult.capturedAt,
@@ -79,6 +83,7 @@ const fallbackReviewData: AiReviewViewData = {
   description: aiReviewResult.description,
   imageSources: [],
   features: aiDetectedFeatures,
+  isAnalysisPending: false,
 }
 
 function createPendingReviewData(localImageUrl: string | undefined): AiReviewViewData {
@@ -90,6 +95,7 @@ function createPendingReviewData(localImageUrl: string | undefined): AiReviewVie
     resultLevel: '분석 대기',
     description: '신고 분석 결과를 불러오는 중입니다.',
     imageSources: localImageUrl ? [localImageUrl] : [],
+    isAnalysisPending: true,
     features: [
       {
         id: 'detected',
@@ -477,6 +483,7 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
           : '백엔드에서 받은 인공지능 분석 결과입니다.'),
     imageSources: imageUrl ? [imageUrl] : [],
     features,
+    isAnalysisPending: !hasAiAnalysis,
   }
 }
 
@@ -952,6 +959,8 @@ export function AiReviewPage() {
 
   useEffect(() => {
     let isActive = true
+    let retryTimer: ReturnType<typeof window.setTimeout> | undefined
+    let pollAttempts = 0
 
     if (!reportId) {
       return () => {
@@ -959,36 +968,61 @@ export function AiReviewPage() {
       }
     }
 
-    getCitizenReport(reportId)
-      .then((report) => {
-        if (!isActive) return
-        const reportReviewData = mapReportToReviewData(report)
+    const clearRetryTimer = () => {
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer)
+        retryTimer = undefined
+      }
+    }
 
-        setReportLoadState({
-          reportId,
-          reviewData: {
-            ...reportReviewData,
-            imageSources: [
-              ...(localImageUrl ? [localImageUrl] : []),
-              ...reportReviewData.imageSources,
-            ],
-          },
-          notice: '백엔드에서 불러온 실제 신고 분석 결과입니다.',
-        })
-      })
-      .catch((error) => {
-        if (!isActive) return
+    const loadReport = () => {
+      getCitizenReport(reportId)
+        .then((report) => {
+          if (!isActive) return
+          const reportReviewData = mapReportToReviewData(report)
+          const shouldPollAgain =
+            reportReviewData.isAnalysisPending && pollAttempts < AI_RESULT_MAX_POLL_ATTEMPTS
 
-        const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
-        setReportLoadState({
-          reportId,
-          reviewData: null,
-          notice: `백엔드 응답을 불러오지 못해 데모 분석 결과를 표시합니다. (${message})`,
+          setReportLoadState({
+            reportId,
+            reviewData: {
+              ...reportReviewData,
+              imageSources: [
+                ...(localImageUrl ? [localImageUrl] : []),
+                ...reportReviewData.imageSources,
+              ],
+            },
+            notice: reportReviewData.isAnalysisPending
+              ? shouldPollAgain
+                ? '백엔드가 아직 AI 결과를 내려주지 않아 자동으로 다시 확인하고 있습니다.'
+                : '백엔드 응답에 AI 분석 결과가 없어 대기 상태로 표시합니다.'
+              : '백엔드에서 불러온 실제 신고 분석 결과입니다.',
+          })
+
+          clearRetryTimer()
+
+          if (shouldPollAgain) {
+            pollAttempts += 1
+            retryTimer = window.setTimeout(loadReport, AI_RESULT_POLL_INTERVAL_MS)
+          }
         })
-      })
+        .catch((error) => {
+          if (!isActive) return
+
+          const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+          setReportLoadState({
+            reportId,
+            reviewData: null,
+            notice: `백엔드 응답을 불러오지 못해 데모 분석 결과를 표시합니다. (${message})`,
+          })
+        })
+    }
+
+    loadReport()
 
     return () => {
       isActive = false
+      clearRetryTimer()
     }
   }, [localImageUrl, reportId])
 
