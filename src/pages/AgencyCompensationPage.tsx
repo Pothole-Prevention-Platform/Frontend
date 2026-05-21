@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ChangeEvent, type ReactNode, useState } from 'react'
 import {
   Building2,
   Check,
@@ -18,7 +18,13 @@ import {
   Plus,
   X,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  createClaimDraft,
+  downloadClaimPdf,
+  submitClaim,
+  uploadClaimAttachment,
+} from '../api/claimApi'
 import {
   accidentInfo,
   agencyContacts,
@@ -30,6 +36,7 @@ import {
   vehicleInfo,
 } from '../data/mockData'
 import type { ClaimChecklistItem, EvidencePhoto } from '../types'
+import type { ClaimResponse } from '../types/claim'
 import { cn } from '../utils/cn'
 
 type ModeKey = 'agency' | 'claim'
@@ -161,12 +168,28 @@ function StatusBadge({ status }: { status: ClaimChecklistItem['status'] }) {
   )
 }
 
+function getClaimId(claim: ClaimResponse | null) {
+  return claim?.claimId ?? claim?.id ?? ''
+}
+
 export function AgencyCompensationPage() {
+  const [searchParams] = useSearchParams()
+  const reportId = searchParams.get('reportId') ?? ''
   const [activeMode, setActiveMode] = useState<ModeKey>('agency')
   const [photos, setPhotos] = useState(evidencePhotos)
   const [documentPage, setDocumentPage] = useState(claimDocumentPreview.currentPage)
   const [notice, setNotice] = useState('')
+  const [claim, setClaim] = useState<ClaimResponse | null>(null)
+  const [damageDescription, setDamageDescription] = useState('포트홀 충격으로 차량 타이어와 휠에 손상이 발생했습니다.')
+  const [estimatedCost, setEstimatedCost] = useState('350000')
+  const [attachmentType, setAttachmentType] = useState('damage_photo')
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [isCreatingClaim, setIsCreatingClaim] = useState(false)
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
+  const [isSubmittingClaim, setIsSubmittingClaim] = useState(false)
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false)
   const navigate = useNavigate()
+  const claimId = getClaimId(claim)
 
   const vehicleFields = [
     { label: '차량 번호', value: vehicleInfo.plateNumber },
@@ -174,6 +197,134 @@ export function AgencyCompensationPage() {
     { label: '연식', value: vehicleInfo.year },
     { label: '보험사', value: vehicleInfo.insuranceCompany },
   ]
+
+  const handleAttachmentChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setAttachmentFile(event.target.files?.[0] ?? null)
+  }
+
+  const handleCreateClaimDraft = async () => {
+    const parsedEstimatedCost = Number.parseInt(estimatedCost.replace(/[^\d]/g, ''), 10)
+
+    if (!reportId) {
+      setNotice('신고 번호가 없어 청구 초안을 만들 수 없습니다. AI 판별 화면에서 보상 청구하기를 눌러 이동해 주세요.')
+      return
+    }
+
+    if (!damageDescription.trim()) {
+      setNotice('피해 내용을 입력해 주세요.')
+      return
+    }
+
+    if (!Number.isFinite(parsedEstimatedCost) || parsedEstimatedCost <= 0) {
+      setNotice('예상 수리비를 숫자로 입력해 주세요.')
+      return
+    }
+
+    setIsCreatingClaim(true)
+    setNotice('')
+
+    try {
+      const createdClaim = await createClaimDraft({
+        reportId,
+        damageDescription: damageDescription.trim(),
+        estimatedCost: parsedEstimatedCost,
+        vehicleInfo: {
+          plateNumber: vehicleInfo.plateNumber,
+          model: vehicleInfo.model,
+          year: vehicleInfo.year,
+          insuranceCompany: vehicleInfo.insuranceCompany,
+          phone: vehicleInfo.phone,
+        },
+      })
+
+      setClaim(createdClaim)
+      setActiveMode('claim')
+      setNotice('보상 청구 초안이 생성되었습니다. 필요한 첨부자료를 추가한 뒤 제출해 주세요.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      setNotice(`청구 초안 생성에 실패했습니다. (${message})`)
+    } finally {
+      setIsCreatingClaim(false)
+    }
+  }
+
+  const handleUploadAttachment = async () => {
+    if (!claimId) {
+      setNotice('먼저 보상 청구 초안을 생성해 주세요.')
+      return
+    }
+
+    if (!attachmentFile) {
+      setNotice('업로드할 첨부 파일을 선택해 주세요.')
+      return
+    }
+
+    setIsUploadingAttachment(true)
+    setNotice('')
+
+    try {
+      const updatedClaim = await uploadClaimAttachment({
+        claimId,
+        attachmentType,
+        file: attachmentFile,
+      })
+      setClaim(updatedClaim)
+      setAttachmentFile(null)
+      setNotice('첨부 파일이 업로드되었습니다.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      setNotice(`첨부 파일 업로드에 실패했습니다. (${message})`)
+    } finally {
+      setIsUploadingAttachment(false)
+    }
+  }
+
+  const handleSubmitClaim = async () => {
+    if (!claimId) {
+      setNotice('먼저 보상 청구 초안을 생성해 주세요.')
+      return
+    }
+
+    setIsSubmittingClaim(true)
+    setNotice('')
+
+    try {
+      const submittedClaim = await submitClaim(claimId)
+      setClaim(submittedClaim)
+      setNotice('보상 청구가 제출되었습니다. 담당 기관 확인 후 진행됩니다.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      setNotice(`보상 청구 제출에 실패했습니다. (${message})`)
+    } finally {
+      setIsSubmittingClaim(false)
+    }
+  }
+
+  const handleDownloadPdf = async () => {
+    if (!claimId) {
+      setNotice('먼저 보상 청구 초안을 생성해 주세요.')
+      return
+    }
+
+    setIsDownloadingPdf(true)
+    setNotice('')
+
+    try {
+      const pdfBlob = await downloadClaimPdf(claimId)
+      const pdfUrl = URL.createObjectURL(pdfBlob)
+      const link = document.createElement('a')
+      link.href = pdfUrl
+      link.download = `pothole-claim-${claimId}.pdf`
+      link.click()
+      URL.revokeObjectURL(pdfUrl)
+      setNotice('문서 다운로드를 시작했습니다.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      setNotice(`문서 다운로드에 실패했습니다. (${message})`)
+    } finally {
+      setIsDownloadingPdf(false)
+    }
+  }
 
   return (
     <div className="min-w-0">
@@ -418,6 +569,114 @@ export function AgencyCompensationPage() {
             </button>
           </div>
 
+          <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[12px] font-black text-blue-700">백엔드 청구 연동</p>
+                <p className="mt-1 text-[12px] font-semibold text-slate-600">
+                  {reportId ? `연결된 신고 번호: ${reportId}` : '신고 번호가 없어 데모 정보로 표시 중입니다.'}
+                </p>
+              </div>
+              {claimId && (
+                <span className="w-fit rounded-full bg-white px-3 py-1 text-[11px] font-black text-blue-700 shadow-sm">
+                  청구 번호 {claimId}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <label htmlFor="claim-damage-description" className="text-[12px] font-black text-slate-600">
+                피해 내용
+              </label>
+              <textarea
+                id="claim-damage-description"
+                value={damageDescription}
+                onChange={(event) => setDamageDescription(event.target.value)}
+                className="h-[74px] w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              />
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_130px]">
+              <div>
+                <label htmlFor="claim-estimated-cost" className="text-[12px] font-black text-slate-600">
+                  예상 수리비
+                </label>
+                <input
+                  id="claim-estimated-cost"
+                  inputMode="numeric"
+                  value={estimatedCost}
+                  onChange={(event) => setEstimatedCost(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateClaimDraft}
+                disabled={isCreatingClaim}
+                className="mt-auto h-10 rounded-lg bg-blue-700 px-4 text-[13px] font-black text-white shadow-sm transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCreatingClaim ? '생성 중' : '초안 생성'}
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-[130px_minmax(0,1fr)_126px]">
+              <div>
+                <label htmlFor="claim-attachment-type" className="text-[12px] font-black text-slate-600">
+                  첨부 유형
+                </label>
+                <select
+                  id="claim-attachment-type"
+                  value={attachmentType}
+                  onChange={(event) => setAttachmentType(event.target.value)}
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                >
+                  <option value="damage_photo">피해 사진</option>
+                  <option value="repair_estimate">수리 견적서</option>
+                  <option value="vehicle_document">차량 서류</option>
+                  <option value="etc">기타 자료</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="claim-attachment-file" className="text-[12px] font-black text-slate-600">
+                  첨부 파일
+                </label>
+                <input
+                  id="claim-attachment-file"
+                  type="file"
+                  onChange={handleAttachmentChange}
+                  className="mt-2 block h-10 w-full rounded-lg border border-slate-200 bg-white text-[12px] font-semibold text-slate-600 file:mr-3 file:h-full file:border-0 file:bg-slate-100 file:px-3 file:text-[12px] file:font-black file:text-slate-600"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleUploadAttachment}
+                disabled={isUploadingAttachment}
+                className="mt-auto h-10 rounded-lg border border-blue-200 bg-white px-3 text-[12px] font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isUploadingAttachment ? '업로드 중' : '업로드'}
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={handleSubmitClaim}
+                disabled={isSubmittingClaim}
+                className="h-10 rounded-lg bg-slate-900 px-4 text-[13px] font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmittingClaim ? '제출 중' : '청구 제출'}
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-black text-slate-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDownloadingPdf ? '다운로드 준비 중' : '문서 다운로드'}
+              </button>
+            </div>
+          </div>
+
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_170px]">
             <ul className="space-y-3">
               {claimChecklistItems.map((item) => {
@@ -471,8 +730,13 @@ export function AgencyCompensationPage() {
             </div>
           )}
 
-          <button type="button" onClick={() => setNotice('제출 기능은 데모 화면입니다. 실제 접수는 담당 기관 확인 후 진행됩니다.')} className="mt-4 h-11 w-full rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[15px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(0,95,220,0.25)]">
-            서류 검토 및 제출하기
+          <button
+            type="button"
+            onClick={handleSubmitClaim}
+            disabled={isSubmittingClaim}
+            className="mt-4 h-11 w-full rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[15px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(0,95,220,0.25)] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
+          >
+            {isSubmittingClaim ? '제출 중' : '서류 검토 및 제출하기'}
           </button>
         </section>
       </div>
@@ -484,7 +748,7 @@ export function AgencyCompensationPage() {
 
       <div className="mt-3 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-[12px] font-semibold leading-5 text-blue-700">
         <Building2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-        이 화면은 공모전 시연용 mock UI이며, 실제 관할기관 조회·보상 청구 접수·법률 판단·정부 시스템 연동을 수행하지 않습니다.
+        관할기관 안내 정보는 데모 데이터를 함께 사용하며, 보상 청구 접수는 백엔드 연결이 가능할 때 실제 요청으로 처리됩니다.
       </div>
     </div>
   )

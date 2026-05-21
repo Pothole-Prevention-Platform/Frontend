@@ -1,4 +1,4 @@
-import { type ElementType, type ReactNode, useState } from 'react'
+import { type ElementType, type ReactNode, useEffect, useState } from 'react'
 import {
   AlertTriangle,
   Camera,
@@ -17,7 +17,8 @@ import {
   Upload,
   Waves,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getCitizenReport } from '../api/reportApi'
 import {
   aiAnalysisSteps,
   aiDetectedFeatures,
@@ -26,6 +27,7 @@ import {
   recentAiResults,
 } from '../data/mockData'
 import type { AiDetectedFeature, AiRecommendedAction, AiReviewIconName, RecentAiResult } from '../types'
+import type { CitizenReportResponse, ReportAgencyResult, ReportAiResult } from '../types/report'
 import { cn } from '../utils/cn'
 
 type AssetImageProps = {
@@ -48,6 +50,266 @@ const iconMap: Record<AiReviewIconName, ElementType> = {
   checkCircle: CheckCircle2,
   camera: Camera,
   shieldAlert: ShieldAlert,
+}
+
+type AiReviewViewData = {
+  capturedAt: string
+  location: string
+  potholeProbability: number
+  confidence: number
+  resultLevel: string
+  description: string
+  imageSources: string[]
+  features: AiDetectedFeature[]
+}
+
+const fallbackReviewData: AiReviewViewData = {
+  capturedAt: aiReviewResult.capturedAt,
+  location: aiReviewResult.location,
+  potholeProbability: aiReviewResult.potholeProbability,
+  confidence: aiReviewResult.confidence,
+  resultLevel: aiReviewResult.resultLevel,
+  description: aiReviewResult.description,
+  imageSources: aiReviewResult.imageSources,
+  features: aiDetectedFeatures,
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function getNestedRecord<T extends Record<string, unknown>>(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key]
+
+    if (isRecord(value)) {
+      return value as T
+    }
+  }
+
+  return undefined
+}
+
+function getString(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+function getNumber(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+
+    if (typeof value === 'string') {
+      const parsedValue = Number.parseFloat(value)
+
+      if (Number.isFinite(parsedValue)) {
+        return parsedValue
+      }
+    }
+  }
+
+  return undefined
+}
+
+function getBooleanOrString(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'boolean' || typeof value === 'string') {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+function normalizePercent(value: number) {
+  const percent = value <= 1 ? value * 100 : value
+  return Math.max(0, Math.min(100, Math.round(percent)))
+}
+
+function formatSeverity(severity: string | undefined, percent: number) {
+  if (!severity) {
+    if (percent >= 90) return '매우 높음'
+    if (percent >= 70) return '높음'
+    if (percent >= 40) return '보통'
+    return '낮음'
+  }
+
+  const severityMap: Record<string, string> = {
+    critical: '매우 높음',
+    high: '높음',
+    medium: '보통',
+    low: '낮음',
+  }
+
+  return severityMap[severity.toLowerCase()] ?? severity
+}
+
+function formatCracks(value: boolean | string | undefined) {
+  if (typeof value === 'boolean') {
+    return value ? '있음' : '없음'
+  }
+
+  return value
+}
+
+function buildAgencyLabel(agency: ReportAgencyResult | undefined) {
+  if (!agency) {
+    return undefined
+  }
+
+  return (
+    agency.agencyName ??
+    agency.roadManagementAgency ??
+    agency.departmentName ??
+    agency.department ??
+    agency.jurisdiction
+  )
+}
+
+function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData {
+  const reportRecord: Record<string, unknown> = report
+  const aiResult =
+    getNestedRecord<ReportAiResult>(reportRecord, ['aiResult', 'ai', 'aiReview', 'analysis', 'potholeAnalysis']) ??
+    report
+  const aiRecord: Record<string, unknown> = aiResult
+  const agency = getNestedRecord<ReportAgencyResult>(reportRecord, [
+    'jurisdictionResult',
+    'agencyResult',
+    'agency',
+    'responsibleAgency',
+  ])
+  const detected = getBooleanOrString(aiRecord, ['detected', 'isPothole', 'potholeDetected'])
+  const confidenceValue = getNumber(aiRecord, ['confidence', 'score', 'probability', 'potholeProbability']) ?? 0
+  const confidence = normalizePercent(confidenceValue)
+  const potholeProbability = normalizePercent(
+    getNumber(aiRecord, ['potholeProbability', 'probability', 'confidence', 'score']) ?? confidence,
+  )
+  const severity = getString(aiRecord, ['severity', 'riskLevel', 'level']) ?? report.severity
+  const estimatedSizeCm = getNumber(aiRecord, ['estimatedSizeCm', 'sizeCm', 'diameterCm'])
+  const depthMinCm = getNumber(aiRecord, ['depthMinCm', 'minDepthCm'])
+  const depthMaxCm = getNumber(aiRecord, ['depthMaxCm', 'maxDepthCm'])
+  const cracks = formatCracks(getBooleanOrString(aiRecord, ['cracks', 'hasCracks']))
+  const shape = getString(aiRecord, ['shape'])
+  const processingTimeMs = getNumber(aiRecord, ['processingTimeMs', 'elapsedMs'])
+  const imageUrl = getString(reportRecord, ['imageUrl', 'photoUrl', 'image'])
+  const agencyLabel = buildAgencyLabel(agency)
+  const resultLevel = formatSeverity(severity, potholeProbability)
+  const detectedText = typeof detected === 'boolean' ? (detected ? '감지됨' : '감지되지 않음') : detected
+
+  const features: AiDetectedFeature[] = [
+    {
+      id: 'detected',
+      label: '포트홀 감지',
+      value: detectedText ?? '분석 결과 확인 중',
+      severity: detected === false ? 'normal' : 'danger',
+      iconName: 'crosshair',
+    },
+    {
+      id: 'confidence',
+      label: '신뢰도',
+      value: `${confidence}%`,
+      score: Math.max(1, Math.ceil(confidence / 20)),
+      severity: confidence >= 70 ? 'warning' : 'normal',
+      iconName: 'shield',
+    },
+    {
+      id: 'severity',
+      label: '위험도',
+      value: resultLevel,
+      severity: potholeProbability >= 70 ? 'danger' : 'warning',
+      iconName: 'alertTriangle',
+    },
+  ]
+
+  if (estimatedSizeCm !== undefined) {
+    features.push({
+      id: 'estimated-size',
+      label: '추정 크기',
+      value: `${estimatedSizeCm}cm`,
+      severity: 'warning',
+      iconName: 'ruler',
+    })
+  }
+
+  if (cracks) {
+    features.push({
+      id: 'cracks',
+      label: '균열',
+      value: cracks,
+      severity: cracks === '없음' ? 'normal' : 'warning',
+      iconName: 'waves',
+    })
+  }
+
+  if (depthMinCm !== undefined || depthMaxCm !== undefined) {
+    features.push({
+      id: 'depth',
+      label: '깊이',
+      value:
+        depthMinCm !== undefined && depthMaxCm !== undefined
+          ? `${depthMinCm}~${depthMaxCm}cm`
+          : `${depthMinCm ?? depthMaxCm}cm`,
+      severity: 'warning',
+      iconName: 'ruler',
+    })
+  }
+
+  if (shape) {
+    features.push({
+      id: 'shape',
+      label: '형태',
+      value: shape,
+      severity: 'normal',
+      iconName: 'listChecks',
+    })
+  }
+
+  if (processingTimeMs !== undefined) {
+    features.push({
+      id: 'processing-time',
+      label: '처리 시간',
+      value: `${processingTimeMs}ms`,
+      severity: 'normal',
+      iconName: 'scan',
+    })
+  }
+
+  if (agencyLabel) {
+    features.push({
+      id: 'agency',
+      label: '담당 기관',
+      value: agencyLabel,
+      severity: 'normal',
+      iconName: 'fileCheck',
+    })
+  }
+
+  return {
+    capturedAt: report.createdAt ?? report.reportedAt ?? fallbackReviewData.capturedAt,
+    location: report.address ?? report.location ?? agency?.jurisdiction ?? fallbackReviewData.location,
+    potholeProbability,
+    confidence,
+    resultLevel,
+    description:
+      getString(aiRecord, ['description', 'summary', 'message']) ??
+      report.description ??
+      '백엔드에서 받은 인공지능 분석 결과입니다.',
+    imageSources: imageUrl ? [imageUrl, ...aiReviewResult.imageSources] : aiReviewResult.imageSources,
+    features,
+  }
 }
 
 function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
@@ -100,7 +362,13 @@ function AnalysisDetectionOverlay() {
   )
 }
 
-function UploadedPhotoPanel({ onNotice }: { onNotice: (message: string) => void }) {
+function UploadedPhotoPanel({
+  review,
+  onNotice,
+}: {
+  review: AiReviewViewData
+  onNotice: (message: string) => void
+}) {
   const navigate = useNavigate()
 
   return (
@@ -111,7 +379,7 @@ function UploadedPhotoPanel({ onNotice }: { onNotice: (message: string) => void 
 
       <div className="relative h-[280px] overflow-hidden rounded-xl bg-slate-900 shadow-inner sm:h-[360px] xl:h-[390px]">
         <AssetImage
-          sources={aiReviewResult.imageSources}
+          sources={review.imageSources}
           alt="AI가 분석한 포트홀 사진"
           className="h-full w-full object-cover"
           fallback={<FallbackRoadImage />}
@@ -121,7 +389,7 @@ function UploadedPhotoPanel({ onNotice }: { onNotice: (message: string) => void 
 
         <div className="absolute inset-x-3 top-3 flex flex-col gap-2 sm:inset-x-5 sm:top-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="max-w-full truncate rounded-lg bg-black/55 px-3 py-2 text-[12px] font-bold text-white backdrop-blur sm:w-fit sm:px-4 sm:text-[13px]">
-            촬영 일시&nbsp;&nbsp; {aiReviewResult.capturedAt}
+            촬영 일시&nbsp;&nbsp; {review.capturedAt}
           </div>
           <button
             type="button"
@@ -135,7 +403,7 @@ function UploadedPhotoPanel({ onNotice }: { onNotice: (message: string) => void 
 
         <div className="absolute inset-x-3 bottom-3 flex flex-col gap-2 sm:inset-x-5 sm:bottom-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-full truncate rounded-lg bg-black/55 px-3 py-2 text-[12px] font-bold text-white backdrop-blur sm:w-fit sm:px-4 sm:text-[13px]">
-            위치&nbsp;&nbsp; {aiReviewResult.location}
+            위치&nbsp;&nbsp; {review.location}
           </div>
           <button
             type="button"
@@ -151,8 +419,7 @@ function UploadedPhotoPanel({ onNotice }: { onNotice: (message: string) => void 
   )
 }
 
-function ConfidenceGauge() {
-  const value = aiReviewResult.confidence
+function ConfidenceGauge({ value }: { value: number }) {
   const radius = 55
   const circumference = 2 * Math.PI * radius
   const dashOffset = circumference * (1 - value / 100)
@@ -160,7 +427,7 @@ function ConfidenceGauge() {
   return (
     <div className="flex h-full min-h-[190px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-5">
       <p className="mb-4 text-center text-[13px] font-black tracking-[-0.03em] text-slate-600">
-        신뢰도 (Confidence)
+        신뢰도
       </p>
 
       <div className="relative flex h-[138px] w-[138px] items-center justify-center">
@@ -196,7 +463,7 @@ function ConfidenceGauge() {
   )
 }
 
-function ResultCard() {
+function ResultCard({ review }: { review: AiReviewViewData }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_12px_28px_rgba(15,40,70,0.04)]">
       <h3 className="text-[18px] font-black tracking-[-0.04em] text-[#07182F]">
@@ -211,21 +478,21 @@ function ResultCard() {
 
           <div className="mt-3 flex items-end gap-2">
             <span className="text-[72px] font-black leading-none tracking-[-0.06em] text-blue-700">
-              {aiReviewResult.potholeProbability}
+              {review.potholeProbability}
             </span>
             <span className="mb-2 text-[34px] font-black text-blue-700">%</span>
           </div>
 
           <span className="mt-3 inline-flex rounded-full bg-blue-100 px-4 py-1 text-[13px] font-black text-blue-700">
-            {aiReviewResult.resultLevel}
+            {review.resultLevel}
           </span>
 
           <p className="mt-4 text-[13px] font-semibold tracking-[-0.03em] text-slate-500">
-            {aiReviewResult.description}
+            {review.description}
           </p>
         </div>
 
-        <ConfidenceGauge />
+        <ConfidenceGauge value={review.confidence} />
       </div>
     </section>
   )
@@ -273,7 +540,7 @@ function FeatureScoreDots({ label, score }: { label: string; score: number }) {
   )
 }
 
-function FeatureAnalysisCard() {
+function FeatureAnalysisCard({ features }: { features: AiDetectedFeature[] }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_12px_28px_rgba(15,40,70,0.04)]">
       <h3 className="text-[18px] font-black tracking-[-0.04em] text-[#07182F]">
@@ -281,7 +548,7 @@ function FeatureAnalysisCard() {
       </h3>
 
       <div className="mt-5 space-y-2">
-        {aiDetectedFeatures.map((feature) => (
+        {features.map((feature) => (
           <FeatureRow key={feature.id} feature={feature} />
         ))}
       </div>
@@ -323,14 +590,21 @@ function RecommendationActionButton({
 
 function RecommendedActions({
   notice,
+  reportId,
   onNotice,
 }: {
   notice: string
+  reportId: string
   onNotice: (message: string) => void
 }) {
   const navigate = useNavigate()
 
   const handleSelect = (action: AiRecommendedAction) => {
+    if (action.actionType === 'confirm' && reportId) {
+      navigate(`/agency?reportId=${encodeURIComponent(reportId)}`)
+      return
+    }
+
     if (action.route) {
       navigate(action.route)
       return
@@ -500,7 +774,45 @@ function RecentResultsPanel({ onNotice }: { onNotice: (message: string) => void 
 }
 
 export function AiReviewPage() {
+  const [searchParams] = useSearchParams()
+  const reportId = searchParams.get('reportId') ?? ''
   const [notice, setNotice] = useState('')
+  const [apiNotice, setApiNotice] = useState('')
+  const [reviewData, setReviewData] = useState<AiReviewViewData | null>(null)
+  const review = reviewData ?? fallbackReviewData
+
+  useEffect(() => {
+    let isActive = true
+
+    if (!reportId) {
+      setReviewData(null)
+      setApiNotice('신고 번호가 없어 데모 분석 결과를 표시합니다.')
+      return () => {
+        isActive = false
+      }
+    }
+
+    setApiNotice('신고 분석 결과를 불러오는 중입니다.')
+
+    getCitizenReport(reportId)
+      .then((report) => {
+        if (!isActive) return
+
+        setReviewData(mapReportToReviewData(report))
+        setApiNotice('백엔드에서 불러온 실제 신고 분석 결과입니다.')
+      })
+      .catch((error) => {
+        if (!isActive) return
+
+        const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+        setReviewData(null)
+        setApiNotice(`백엔드 응답을 불러오지 못해 데모 분석 결과를 표시합니다. (${message})`)
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [reportId])
 
   return (
     <div className="min-w-0">
@@ -515,16 +827,22 @@ export function AiReviewPage() {
         </div>
       </div>
 
+      {apiNotice && (
+        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] font-bold leading-5 text-blue-700" aria-live="polite">
+          {apiNotice}
+        </div>
+      )}
+
       <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
-          <UploadedPhotoPanel onNotice={setNotice} />
+          <UploadedPhotoPanel review={review} onNotice={setNotice} />
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <ResultCard />
-            <FeatureAnalysisCard />
+            <ResultCard review={review} />
+            <FeatureAnalysisCard features={review.features} />
           </div>
 
-          <RecommendedActions notice={notice} onNotice={setNotice} />
+          <RecommendedActions notice={notice} reportId={reportId} onNotice={setNotice} />
         </div>
 
         <aside className="grid min-w-0 gap-5 lg:grid-cols-2 xl:block xl:space-y-5">

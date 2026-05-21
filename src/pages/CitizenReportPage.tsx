@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { createCitizenReport, getReportId } from '../api/reportApi'
 import {
   aiVerificationSteps,
   citizenReportMock,
@@ -130,7 +131,7 @@ function FallbackPotholeImage({ compact = false }: { compact?: boolean }) {
       <div className="absolute left-[39%] top-[39%] h-[21%] w-[25%] rounded-[50%] bg-stone-400/90" />
       <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black text-slate-600 shadow-sm">
         <ImageIcon size={12} aria-hidden="true" />
-        MOCK
+        데모
       </div>
     </div>
   )
@@ -452,6 +453,9 @@ function ReportForm({
   onSelectSeverity,
   onDescriptionChange,
   onSubmit,
+  errorMessage,
+  isSubmitting,
+  onMockReview,
 }: {
   selectedSeverity: ReportSeverityId
   riskType: string
@@ -465,6 +469,9 @@ function ReportForm({
   onSelectSeverity: (severity: ReportSeverityId) => void
   onDescriptionChange: (description: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
+  errorMessage: string
+  isSubmitting: boolean
+  onMockReview: () => void
 }) {
   return (
     <form
@@ -529,12 +536,30 @@ function ReportForm({
           </p>
         </div>
 
+        {errorMessage && (
+          <div
+            className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[13px] font-bold leading-5 text-red-700"
+            aria-live="polite"
+          >
+            <p>{errorMessage}</p>
+            <button
+              type="button"
+              onClick={onMockReview}
+              className="mt-2 text-[12px] font-black text-red-800 underline underline-offset-4"
+            >
+              데모 결과 화면으로 계속 보기
+            </button>
+          </div>
+        )}
+
         <button
           type="submit"
-          className="mt-5 flex h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[16px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(0,95,220,0.25)]"
+          disabled={isSubmitting}
+          aria-busy={isSubmitting}
+          className="mt-5 flex h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[16px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(0,95,220,0.25)] disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
         >
           <FileText size={20} aria-hidden="true" />
-          신고 접수
+          {isSubmitting ? '신고 접수 중' : '신고 접수'}
         </button>
 
         <div className="mt-3 flex items-center justify-center gap-2 text-slate-400">
@@ -709,6 +734,8 @@ export function CitizenReportPage() {
   const [description, setDescription] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
     return () => {
@@ -724,6 +751,7 @@ export function CitizenReportPage() {
     if (file) {
       setSelectedFile(file)
       setPreviewUrl(URL.createObjectURL(file))
+      setSubmitError('')
     }
   }
 
@@ -732,9 +760,40 @@ export function CitizenReportPage() {
     setPreviewUrl(null)
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    navigate('/report/ai-review')
+
+    if (!selectedFile) {
+      setSubmitError('신고 사진을 먼저 첨부해 주세요.')
+      return
+    }
+
+    setIsSubmitting(true)
+    setSubmitError('')
+
+    try {
+      const result = await createCitizenReport({
+        image: selectedFile,
+        latitude: 37.5665,
+        longitude: 126.978,
+        hazardType: riskType,
+        severity: selectedSeverity,
+        description: description.trim() || undefined,
+      })
+      const reportId = getReportId(result)
+
+      if (!reportId) {
+        setSubmitError('신고는 접수되었지만 결과 번호를 찾을 수 없습니다. 잠시 후 다시 시도해 주세요.')
+        return
+      }
+
+      navigate(`/report/ai-review?reportId=${encodeURIComponent(reportId)}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      setSubmitError(`백엔드 연결에 실패했습니다. 서버 실행 상태를 확인해 주세요. (${message})`)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const fileName = selectedFile?.name ?? citizenReportMock.uploadedFileName
@@ -763,6 +822,9 @@ export function CitizenReportPage() {
           onSelectSeverity={setSelectedSeverity}
           onDescriptionChange={setDescription}
           onSubmit={handleSubmit}
+          errorMessage={submitError}
+          isSubmitting={isSubmitting}
+          onMockReview={() => navigate('/report/ai-review')}
         />
 
         <aside className="grid gap-5 lg:grid-cols-2 xl:block xl:space-y-5">

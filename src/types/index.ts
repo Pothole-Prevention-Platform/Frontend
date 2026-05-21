@@ -1,5 +1,8 @@
 export type UserRole = 'rider' | 'driver' | 'victim' | 'admin'
 
+export type * from './report'
+export type * from './claim'
+
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
 export type RoadType = 'national' | 'provincial' | 'city' | 'district'
