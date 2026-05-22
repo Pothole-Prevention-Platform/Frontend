@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, useState } from 'react'
+import { type ChangeEvent, type ReactNode, useEffect, useState } from 'react'
 import {
   Building2,
   Check,
@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getAgencyByLocation } from '../api/agencyApi'
 import {
   createClaimDraft,
   downloadClaimPdf,
@@ -26,6 +27,7 @@ import {
   submitClaim,
   uploadClaimAttachment,
 } from '../api/claimApi'
+import { getCitizenReport, SEOUL_FALLBACK_COORDINATES } from '../api/reportApi'
 import {
   accidentInfo,
   agencyContacts,
@@ -36,8 +38,9 @@ import {
   evidencePhotos,
   vehicleInfo,
 } from '../data/mockData'
-import type { ClaimChecklistItem, EvidencePhoto } from '../types'
+import type { AgencyContact, AgencyInfo, ClaimChecklistItem, EvidencePhoto } from '../types'
 import type { AttachmentResponse, ChecklistResponse, ClaimAttachmentType, ClaimResponse } from '../types/claim'
+import type { CitizenReportResponse } from '../types/report'
 import { cn } from '../utils/cn'
 
 type ModeKey = 'agency' | 'claim'
@@ -231,6 +234,63 @@ function mergeUploadedAttachment(claim: ClaimResponse | null, attachment: Attach
   }
 }
 
+function firstText(...values: Array<string | null | undefined>) {
+  return values.find((value) => typeof value === 'string' && value.trim())?.trim()
+}
+
+function getReportCoordinates(report: CitizenReportResponse | null) {
+  if (typeof report?.latitude === 'number' && Number.isFinite(report.latitude) && typeof report.longitude === 'number' && Number.isFinite(report.longitude)) {
+    return {
+      lat: report.latitude,
+      lng: report.longitude,
+    }
+  }
+
+  return {
+    lat: SEOUL_FALLBACK_COORDINATES.latitude,
+    lng: SEOUL_FALLBACK_COORDINATES.longitude,
+  }
+}
+
+function getAgencyDisplay(agencyInfo: AgencyInfo | null, claim: ClaimResponse | null, report: CitizenReportResponse | null) {
+  const roadAddress = firstText(report?.address, agencyInfo?.roadName, agencyInfo?.address, agencyLookupResult.roadAddress) ?? agencyLookupResult.roadAddress
+  const detailAddress = firstText(report?.locationDetail, agencyInfo?.address, agencyLookupResult.lotAddress) ?? agencyLookupResult.lotAddress
+  const districtName = firstText(agencyInfo?.districtName, agencyLookupResult.districtOffice)
+  const managingAuthority =
+    firstText(claim?.managingAuthority, agencyInfo?.managingAuthority, agencyInfo?.departmentName, agencyLookupResult.roadManagementAgency) ??
+    agencyLookupResult.roadManagementAgency
+
+  return {
+    roadAddress,
+    lotAddress: detailAddress,
+    province: firstText(agencyInfo?.sido, agencyLookupResult.province) ?? agencyLookupResult.province,
+    districtOffice: districtName?.endsWith('청') ? districtName : `${districtName ?? '관할 구'}청`,
+    roadManagementAgency: managingAuthority,
+  }
+}
+
+function getDisplayAgencyContacts(agencyInfo: AgencyInfo | null): AgencyContact[] {
+  if (!agencyInfo) {
+    return agencyContacts
+  }
+
+  const fallbackContact = agencyContacts[0]
+
+  return [
+    {
+      ...fallbackContact,
+      id: 'agency-api-main',
+      category: '조회 결과',
+      departmentName: firstText(agencyInfo.departmentName, fallbackContact.departmentName) ?? fallbackContact.departmentName,
+      responsibility: firstText(agencyInfo.managingAuthority, agencyInfo.roadName, fallbackContact.responsibility) ?? fallbackContact.responsibility,
+      agencyName: firstText(agencyInfo.managingAuthority, fallbackContact.agencyName) ?? fallbackContact.agencyName,
+      department: firstText(agencyInfo.departmentName, fallbackContact.department) ?? fallbackContact.department,
+      phone: firstText(agencyInfo.phone, agencyInfo.contact, fallbackContact.phone) ?? fallbackContact.phone,
+      address: firstText(agencyInfo.address, fallbackContact.address) ?? fallbackContact.address,
+    },
+  ]
+}
+
 export function AgencyCompensationPage() {
   const [searchParams] = useSearchParams()
   const reportId = searchParams.get('reportId') ?? ''
@@ -239,6 +299,10 @@ export function AgencyCompensationPage() {
   const [documentPage, setDocumentPage] = useState(claimDocumentPreview.currentPage)
   const [notice, setNotice] = useState('')
   const [claim, setClaim] = useState<ClaimResponse | null>(null)
+  const [linkedReport, setLinkedReport] = useState<CitizenReportResponse | null>(null)
+  const [agencyInfo, setAgencyInfo] = useState<AgencyInfo | null>(null)
+  const [isAgencyLoading, setIsAgencyLoading] = useState(true)
+  const [agencyNotice, setAgencyNotice] = useState('')
   const [incidentAt, setIncidentAt] = useState('')
   const [incidentType, setIncidentType] = useState(accidentInfo.accidentType)
   const [damageDescription, setDamageDescription] = useState('포트홀 충격으로 차량 타이어와 휠에 손상이 발생했습니다.')
@@ -259,6 +323,61 @@ export function AgencyCompensationPage() {
   const isDraftClaim = !claim || claim.status === 'DRAFT'
   const displayChecklistItems = getChecklistItems(claim?.checklist)
   const displayClaimStatus = claim?.status ? claimStatusLabels[claim.status] ?? claim.status : '초안 생성 전'
+  const agencyDisplay = getAgencyDisplay(agencyInfo, claim, linkedReport)
+  const displayAgencyContacts = getDisplayAgencyContacts(agencyInfo)
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadAgencyInfo() {
+      setIsAgencyLoading(true)
+      setAgencyNotice('')
+
+      let report: CitizenReportResponse | null = null
+
+      if (reportId) {
+        try {
+          report = await getCitizenReport(reportId)
+
+          if (!ignore) {
+            setLinkedReport(report)
+          }
+        } catch {
+          if (!ignore) {
+            setLinkedReport(null)
+          }
+        }
+      }
+
+      const coordinates = getReportCoordinates(report)
+
+      try {
+        const agency = await getAgencyByLocation(coordinates)
+
+        if (!ignore) {
+          setAgencyInfo(agency)
+          setAgencyNotice('')
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+
+        if (!ignore) {
+          setAgencyInfo(null)
+          setAgencyNotice(`관할기관 API 연결에 실패해 데모 데이터를 표시합니다. (${message})`)
+        }
+      } finally {
+        if (!ignore) {
+          setIsAgencyLoading(false)
+        }
+      }
+    }
+
+    void loadAgencyInfo()
+
+    return () => {
+      ignore = true
+    }
+  }, [reportId])
 
   const vehicleFields = [
     { label: '차량 번호', value: claim?.vehiclePlateNumber ?? vehiclePlateNumber },
@@ -460,8 +579,8 @@ export function AgencyCompensationPage() {
               />
               <div className="absolute left-4 top-4 max-w-[250px] rounded-xl bg-white/92 p-4 shadow-[0_10px_24px_rgba(15,40,70,0.12)] backdrop-blur">
                 <p className="text-[13px] font-black text-blue-700">선택 위치</p>
-                <p className="mt-2 text-[12px] font-black leading-5 text-slate-700">{agencyLookupResult.roadAddress}</p>
-                <p className="mt-1 text-[12px] font-bold text-slate-600">{agencyLookupResult.lotAddress}</p>
+                <p className="mt-2 text-[12px] font-black leading-5 text-slate-700">{agencyDisplay.roadAddress}</p>
+                <p className="mt-1 text-[12px] font-bold text-slate-600">{agencyDisplay.lotAddress}</p>
               </div>
               <MapPin className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-[35%] text-blue-700 drop-shadow-[0_8px_14px_rgba(0,95,220,0.28)]" size={58} fill="#0B6DDE" aria-hidden="true" />
               <div className="absolute right-3 top-[116px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md">
@@ -481,6 +600,13 @@ export function AgencyCompensationPage() {
               <Info size={16} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
               도로 관할은 도로법 및 지자체 조례에 따라 달라질 수 있습니다.
             </div>
+
+            {(isAgencyLoading || agencyNotice) && (
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[12px] font-bold leading-5 text-blue-700" aria-live="polite">
+                <Info size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+                {isAgencyLoading ? '관할기관 정보를 조회하는 중입니다.' : agencyNotice}
+              </div>
+            )}
           </div>
 
           <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5">
@@ -491,9 +617,9 @@ export function AgencyCompensationPage() {
 
             <div className="mt-4 grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-3">
               {[
-                { label: '시도', value: agencyLookupResult.province },
-                { label: '구청', value: agencyLookupResult.districtOffice },
-                { label: '도로관리기관', value: claim?.managingAuthority ?? agencyLookupResult.roadManagementAgency },
+                { label: '시도', value: agencyDisplay.province },
+                { label: '구청', value: agencyDisplay.districtOffice },
+                { label: '도로관리기관', value: agencyDisplay.roadManagementAgency },
               ].map((item) => (
                 <div key={item.label} className="border-b border-slate-200 px-5 py-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
                   <p className="text-[12px] font-black text-slate-400">{item.label}</p>
@@ -515,7 +641,7 @@ export function AgencyCompensationPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {agencyContacts.map((contact) => (
+                  {displayAgencyContacts.map((contact) => (
                     <tr key={contact.id} className="border-t border-slate-200 text-[12px]">
                       <td className="px-4 py-3 font-bold text-slate-600">{contact.category}</td>
                       <td className="px-4 py-3 font-black text-slate-700">{contact.departmentName}</td>
@@ -533,7 +659,7 @@ export function AgencyCompensationPage() {
             </div>
 
             <div className="mt-3 space-y-3 md:hidden">
-              {agencyContacts.map((contact) => (
+              {displayAgencyContacts.map((contact) => (
                 <article key={contact.id} className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -880,7 +1006,7 @@ export function AgencyCompensationPage() {
                   <div>
                     <p className="text-[11px] font-black text-slate-400">관할기관</p>
                     <p className="mt-1 text-[13px] font-black text-slate-700">
-                      {claim.managingAuthority ?? agencyLookupResult.roadManagementAgency}
+                      {agencyDisplay.roadManagementAgency}
                     </p>
                   </div>
                   <div>
@@ -1013,7 +1139,7 @@ export function AgencyCompensationPage() {
 
       <div className="mt-3 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-[12px] font-semibold leading-5 text-blue-700">
         <Building2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-        관할기관 안내 정보는 데모 데이터를 함께 사용하며, 보상 청구 접수는 백엔드 연결이 가능할 때 실제 요청으로 처리됩니다.
+        관할기관 안내 정보는 백엔드 조회 결과를 우선 사용하며, API 연결 실패 시 데모 데이터를 함께 표시합니다.
       </div>
     </div>
   )

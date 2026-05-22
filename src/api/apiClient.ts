@@ -156,7 +156,13 @@ export function unwrapApiResponse<T>(body: unknown): T {
   }
 
   const hasWrapperShape =
-    'success' in body || 'data' in body || 'result' in body || 'payload' in body || 'response' in body || 'error' in body
+    'success' in body ||
+    'data' in body ||
+    'result' in body ||
+    'payload' in body ||
+    'body' in body ||
+    'response' in body ||
+    'error' in body
 
   if (!hasWrapperShape) {
     return body as T
@@ -185,6 +191,10 @@ export function unwrapApiResponse<T>(body: unknown): T {
 
   if ('payload' in body) {
     return body.payload as T
+  }
+
+  if ('body' in body) {
+    return body.body as T
   }
 
   return body.response as T

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   CheckCircle2,
   ChevronDown,
@@ -12,6 +12,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react'
+import { getRiskDistrictRanking, getRiskZones } from '../api/riskApi'
 import {
   adminFilters,
   adminKpiStats,
@@ -24,12 +25,15 @@ import {
 import type {
   AdminColorType,
   AdminKpiIconType,
+  AdminMapRiskPoint,
   AdminMapRiskLevel,
   AdminPriorityArea,
   AdminPriorityTab,
   AdminRiskDistributionItem,
   AdminRiskGrade,
   AdminStatusIconType,
+  RiskDistrictRanking,
+  RiskGridResult,
 } from '../types'
 import { cn } from '../utils/cn'
 
@@ -178,6 +182,173 @@ const mapLabels = [
   { name: '서초구', x: 68, y: 83 },
   { name: '송파구', x: 86, y: 73 },
 ]
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getNumberField(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+function getStringField(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return undefined
+}
+
+function normalizeRiskScore(source: Record<string, unknown>) {
+  const rawScore = getNumberField(source, ['riskScore', 'maxRiskScore', 'averageRiskScore', 'score', 'value'])
+
+  if (rawScore === undefined) {
+    return 0
+  }
+
+  if (rawScore > 0 && rawScore <= 1) {
+    return Math.round(rawScore * 100)
+  }
+
+  if (rawScore > 1 && rawScore <= 10) {
+    return Math.round(rawScore * 10)
+  }
+
+  return clamp(Math.round(rawScore), 0, 100)
+}
+
+function getAdminRiskGrade(score: number): AdminRiskGrade {
+  if (score >= 70) {
+    return '긴급'
+  }
+
+  if (score >= 40) {
+    return '주의'
+  }
+
+  return '관심'
+}
+
+function getAdminMapRiskLevel(score: number): AdminMapRiskLevel {
+  if (score >= 80) {
+    return 'very-high'
+  }
+
+  if (score >= 60) {
+    return 'high'
+  }
+
+  if (score >= 40) {
+    return 'medium'
+  }
+
+  if (score >= 20) {
+    return 'low'
+  }
+
+  return 'very-low'
+}
+
+function getMapPosition(result: RiskGridResult, fallback: AdminMapRiskPoint) {
+  const latitude = getNumberField(result, ['centerLat', 'latitude', 'lat'])
+  const longitude = getNumberField(result, ['centerLng', 'longitude', 'lng'])
+
+  if (latitude === undefined || longitude === undefined) {
+    return { x: fallback.x, y: fallback.y }
+  }
+
+  return {
+    x: clamp(((longitude - 126.75) / (127.2 - 126.75)) * 100, 8, 92),
+    y: clamp(((37.72 - latitude) / (37.72 - 37.42)) * 100, 10, 88),
+  }
+}
+
+function toAdminMapRiskPoints(rows: RiskGridResult[]): AdminMapRiskPoint[] {
+  return rows.slice(0, 8).map((row, index) => {
+    const fallback = adminMapRiskPoints[index % adminMapRiskPoints.length]
+    const score = normalizeRiskScore(row)
+    const position = getMapPosition(row, fallback)
+    const district = getStringField(row, ['districtName', 'district', 'guName']) ?? fallback.district
+    const id = getStringField(row, ['gridCode', 'gridId', 'id']) ?? `risk-point-api-${index}`
+
+    return {
+      id,
+      district,
+      value: score,
+      level: getAdminMapRiskLevel(score),
+      x: position.x,
+      y: position.y,
+    }
+  })
+}
+
+function toPriorityAreasFromRankings(rows: RiskDistrictRanking[]): AdminPriorityArea[] {
+  return rows.slice(0, 10).map((row, index) => {
+    const score = normalizeRiskScore(row)
+    const totalGridCount = getNumberField(row, ['totalGridCount', 'gridCount']) ?? 0
+    const highRiskGridCount = getNumberField(row, ['highRiskGridCount', 'dangerGridCount']) ?? 0
+    const highRiskRatio = getNumberField(row, ['highRiskRatio']) ?? (totalGridCount > 0 ? (highRiskGridCount / totalGridCount) * 100 : score)
+
+    return {
+      rank: index + 1,
+      district: getStringField(row, ['districtName', 'district', 'guName']) ?? `자치구 ${index + 1}`,
+      riskGrade: getAdminRiskGrade(score),
+      reportCount: totalGridCount,
+      unresolvedCount: highRiskGridCount,
+      maxUnresolvedDays: Math.round(getNumberField(row, ['maxRiskScore']) ?? score),
+      deltaLabel: `${Math.round(highRiskRatio)}%`,
+      deltaDirection: 'up',
+    }
+  })
+}
+
+function toPriorityAreasFromZones(rows: RiskGridResult[]): AdminPriorityArea[] {
+  const aggregates = new Map<string, { count: number; highRiskCount: number; maxScore: number; scoreSum: number }>()
+
+  rows.forEach((row) => {
+    const district = getStringField(row, ['districtName', 'district', 'guName']) ?? '자치구 미확인'
+    const score = normalizeRiskScore(row)
+    const current = aggregates.get(district) ?? { count: 0, highRiskCount: 0, maxScore: 0, scoreSum: 0 }
+
+    aggregates.set(district, {
+      count: current.count + 1,
+      highRiskCount: current.highRiskCount + (score >= 70 ? 1 : 0),
+      maxScore: Math.max(current.maxScore, score),
+      scoreSum: current.scoreSum + score,
+    })
+  })
+
+  return Array.from(aggregates.entries())
+    .map(([district, aggregate]) => ({
+      district,
+      score: aggregate.scoreSum / Math.max(1, aggregate.count),
+      ...aggregate,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map((aggregate, index) => ({
+      rank: index + 1,
+      district: aggregate.district,
+      riskGrade: getAdminRiskGrade(aggregate.maxScore),
+      reportCount: aggregate.count,
+      unresolvedCount: aggregate.highRiskCount,
+      maxUnresolvedDays: Math.round(aggregate.maxScore),
+      deltaLabel: `${Math.round((aggregate.highRiskCount / Math.max(1, aggregate.count)) * 100)}%`,
+      deltaDirection: 'up',
+    }))
+}
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ko-KR').format(value)
@@ -521,7 +692,7 @@ function MapBaseIllustration() {
   )
 }
 
-function SeoulRiskMap({ onMockAction }: { onMockAction: (message: string) => void }) {
+function SeoulRiskMap({ onMockAction, points }: { onMockAction: (message: string) => void; points: AdminMapRiskPoint[] }) {
   const [scope, setScope] = useState('전체')
 
   return (
@@ -546,7 +717,7 @@ function SeoulRiskMap({ onMockAction }: { onMockAction: (message: string) => voi
             {label.name}
           </span>
         ))}
-        {adminMapRiskPoints.map((point) => {
+        {points.map((point) => {
           const style = mapRiskStyles[point.level]
 
           return (
@@ -588,9 +759,17 @@ function RiskGradeBadge({ riskGrade }: { riskGrade: AdminRiskGrade }) {
   )
 }
 
-function PriorityTable({ selectedTab, onTabChange }: { selectedTab: AdminPriorityTab; onTabChange: (tab: AdminPriorityTab) => void }) {
+function PriorityTable({
+  areas,
+  selectedTab,
+  onTabChange,
+}: {
+  areas: AdminPriorityArea[]
+  selectedTab: AdminPriorityTab
+  onTabChange: (tab: AdminPriorityTab) => void
+}) {
   const sortedAreas = useMemo(() => {
-    const rows = [...adminPriorityAreas]
+    const rows = [...areas]
 
     if (selectedTab === 'reports') {
       return rows.sort((a, b) => b.reportCount - a.reportCount)
@@ -601,7 +780,7 @@ function PriorityTable({ selectedTab, onTabChange }: { selectedTab: AdminPriorit
     }
 
     return rows.sort((a, b) => a.rank - b.rank)
-  }, [selectedTab])
+  }, [areas, selectedTab])
 
   const tabs: { id: AdminPriorityTab; label: string }[] = [
     { id: 'risk', label: '위험도순' },
@@ -862,13 +1041,64 @@ export function AdminDashboardPage() {
   const [period, setPeriod] = useState(adminFilters.periodLabel)
   const [status, setStatus] = useState(adminFilters.status)
   const [selectedPriorityTab, setSelectedPriorityTab] = useState<AdminPriorityTab>('risk')
+  const [priorityAreas, setPriorityAreas] = useState<AdminPriorityArea[]>(adminPriorityAreas)
+  const [mapRiskPoints, setMapRiskPoints] = useState<AdminMapRiskPoint[]>(adminMapRiskPoints)
+  const [isRiskLoading, setIsRiskLoading] = useState(true)
+  const [riskApiNotice, setRiskApiNotice] = useState('')
   const [mockMessage, setMockMessage] = useState('')
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadDashboardRiskData() {
+      const districtName = district === '전체' ? undefined : district
+      setIsRiskLoading(true)
+      setRiskApiNotice('')
+
+      const [zonesResult, rankingResult] = await Promise.allSettled([
+        getRiskZones(districtName),
+        getRiskDistrictRanking(),
+      ])
+
+      if (ignore) {
+        return
+      }
+
+      const zoneRows = zonesResult.status === 'fulfilled' ? zonesResult.value : []
+      const rankingRows = rankingResult.status === 'fulfilled' ? rankingResult.value : []
+      const filteredRankingRows = districtName
+        ? rankingRows.filter((row) => getStringField(row, ['districtName', 'district', 'guName']) === districtName)
+        : rankingRows
+
+      setMapRiskPoints(zoneRows.length > 0 ? toAdminMapRiskPoints(zoneRows) : adminMapRiskPoints)
+
+      if (filteredRankingRows.length > 0) {
+        setPriorityAreas(toPriorityAreasFromRankings(filteredRankingRows))
+      } else if (zoneRows.length > 0) {
+        setPriorityAreas(toPriorityAreasFromZones(zoneRows))
+      } else {
+        setPriorityAreas(adminPriorityAreas)
+      }
+
+      if (zonesResult.status === 'rejected' || rankingResult.status === 'rejected') {
+        setRiskApiNotice('위험도 대시보드 API를 불러오지 못해 데모 데이터를 표시합니다. Swagger에 risk/dashboard 엔드포인트가 노출되어 있는지 확인해 주세요.')
+      }
+
+      setIsRiskLoading(false)
+    }
+
+    void loadDashboardRiskData()
+
+    return () => {
+      ignore = true
+    }
+  }, [district])
 
   const resetFilters = () => {
     setDistrict(adminFilters.district)
     setPeriod(adminFilters.periodLabel)
     setStatus(adminFilters.status)
-    setMockMessage('필터가 기본값으로 초기화되었습니다. 데모 화면에서는 실제 조회를 수행하지 않습니다.')
+    setMockMessage('필터가 기본값으로 초기화되었습니다. 위험도 API를 다시 조회합니다.')
   }
 
   return (
@@ -899,6 +1129,12 @@ export function AdminDashboardPage() {
         </p>
       )}
 
+      {(isRiskLoading || riskApiNotice) && (
+        <p role="status" className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] font-bold leading-5 text-blue-700">
+          {isRiskLoading ? '위험도 대시보드 데이터를 불러오는 중입니다.' : riskApiNotice}
+        </p>
+      )}
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="관리자 주요 지표">
         {adminKpiStats.map((stat) => (
           <KpiCard key={stat.id} stat={stat} />
@@ -908,11 +1144,11 @@ export function AdminDashboardPage() {
       <section className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr_1.2fr]">
         <TrendChart />
         <DonutChart />
-        <SeoulRiskMap onMockAction={setMockMessage} />
+        <SeoulRiskMap points={mapRiskPoints} onMockAction={setMockMessage} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.8fr_0.8fr]">
-        <PriorityTable selectedTab={selectedPriorityTab} onTabChange={setSelectedPriorityTab} />
+        <PriorityTable areas={priorityAreas} selectedTab={selectedPriorityTab} onTabChange={setSelectedPriorityTab} />
         <RepairAssignmentCard onAssigned={setMockMessage} />
         <StatusSummary onMockAction={setMockMessage} />
       </section>

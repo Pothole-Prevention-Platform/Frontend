@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import {
   Building2,
   ChevronDown,
@@ -15,8 +15,9 @@ import {
   Siren,
   UserRound,
 } from 'lucide-react'
+import { getLatestGridRiskResults, getRiskZones } from '../api/riskApi'
 import { riskHighZones, riskLegend, riskMapFilters, riskMapStats } from '../data/mockData'
-import type { RiskMapFilterId, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem } from '../types'
+import type { RiskGridResult, RiskMapFilterId, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem, RiskMapStats } from '../types'
 import { cn } from '../utils/cn'
 
 type MapImageState = 'webp' | 'png' | 'fallback'
@@ -46,6 +47,12 @@ const riskGradeClasses: Record<RiskMapHighZoneGrade, string> = {
   주의: 'bg-orange-500 text-white',
   관심: 'bg-yellow-400 text-slate-900',
   '안전/관찰': 'bg-green-500 text-white',
+  '매우 높음': 'bg-red-600 text-white',
+  위험: 'bg-red-600 text-white',
+  높음: 'bg-orange-500 text-white',
+  보통: 'bg-yellow-400 text-slate-900',
+  낮음: 'bg-green-500 text-white',
+  안전: 'bg-green-500 text-white',
 }
 
 const statusClasses: Record<string, string> = {
@@ -84,6 +91,169 @@ const fallbackDistricts = [
   ['강동구', '93%', '49%'],
   ['광진구', '76%', '44%'],
 ] as const
+
+function clampPercent(value: number) {
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+function getNumberField(result: RiskGridResult, keys: string[]) {
+  for (const key of keys) {
+    const value = result[key]
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+function getStringField(result: RiskGridResult, keys: string[]) {
+  for (const key of keys) {
+    const value = result[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return undefined
+}
+
+function normalizeRiskScore(result: RiskGridResult) {
+  const rawScore = getNumberField(result, ['riskScore', 'score', 'riskPercent', 'probability', 'value'])
+
+  if (rawScore === undefined) {
+    return 0
+  }
+
+  if (rawScore > 0 && rawScore <= 1) {
+    return clampPercent(rawScore * 100)
+  }
+
+  if (rawScore > 1 && rawScore <= 10) {
+    return clampPercent(rawScore * 10)
+  }
+
+  return clampPercent(rawScore)
+}
+
+function getRiskGrade(result: RiskGridResult, riskPercent: number): RiskMapHighZoneGrade {
+  const rawGrade = getStringField(result, ['riskGrade', 'riskLevel', 'grade', 'level'])?.toUpperCase()
+
+  if (rawGrade) {
+    const gradeMap: Record<string, RiskMapHighZoneGrade> = {
+      CRITICAL: '매우 높음',
+      VERY_HIGH: '매우 높음',
+      DANGER: '위험',
+      HIGH: '높음',
+      LARGE: '높음',
+      MEDIUM: '보통',
+      CAUTION: '보통',
+      WARNING: '보통',
+      LOW: '낮음',
+      ATTENTION: '낮음',
+      SAFE: '안전',
+      NONE: '안전',
+    }
+    return gradeMap[rawGrade] ?? (riskPercent >= 70 ? '위험' : riskPercent >= 40 ? '보통' : riskPercent >= 20 ? '낮음' : '안전')
+  }
+
+  if (riskPercent >= 70) {
+    return '위험'
+  }
+
+  if (riskPercent >= 40) {
+    return '보통'
+  }
+
+  if (riskPercent >= 20) {
+    return '낮음'
+  }
+
+  return '안전'
+}
+
+function getRiskReasons(result: RiskGridResult) {
+  const reasons = [
+    { label: '강수 영향', score: getNumberField(result, ['rainfallScore']) },
+    { label: '교통량 영향', score: getNumberField(result, ['trafficScore']) },
+    { label: '하수관 노후', score: getNumberField(result, ['sewerScore', 'sewerAgingScore']) },
+    { label: '굴착 공사', score: getNumberField(result, ['excavationScore', 'undergroundConstructionScore']) },
+    { label: '포트홀 이력', score: getNumberField(result, ['potholeScore']) },
+  ]
+    .filter((item): item is { label: string; score: number } => typeof item.score === 'number' && item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((item) => item.label)
+
+  return reasons.length > 0 ? reasons : ['위험도 산정 결과']
+}
+
+function formatRiskTime(value: string | undefined) {
+  if (!value) {
+    return '최근 산출'
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return '최근 산출'
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function getCoordinateText(result: RiskGridResult) {
+  const latitude = getNumberField(result, ['centerLat', 'latitude', 'lat'])
+  const longitude = getNumberField(result, ['centerLng', 'longitude', 'lng'])
+
+  if (latitude === undefined || longitude === undefined) {
+    return undefined
+  }
+
+  return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`
+}
+
+function toRiskMapHighZone(result: RiskGridResult, index: number): RiskMapHighZone {
+  const riskPercent = normalizeRiskScore(result)
+  const gridCode = getStringField(result, ['gridCode', 'gridId', 'id'])
+  const districtName = getStringField(result, ['districtName', 'district', 'guName'])
+  const derivedRoadName = [districtName, gridCode].filter(Boolean).join(' ')
+  const apiRoadName = getStringField(result, ['roadName', 'address'])
+  const roadName = apiRoadName ?? (derivedRoadName || `위험 격자 ${index + 1}`)
+  const detailLocation = getCoordinateText(result) ?? (gridCode ? `격자 ${gridCode}` : '좌표 정보 확인 필요')
+
+  return {
+    id: gridCode ?? `risk-zone-api-${index}`,
+    riskGrade: getRiskGrade(result, riskPercent),
+    roadName,
+    detailLocation,
+    riskPercent,
+    reasons: getRiskReasons(result),
+    recentReportTime: formatRiskTime(result.updatedAt ?? result.calculatedAt),
+    reportCount: getNumberField(result, ['reportCount', 'recentReportCount']) ?? 0,
+    status: riskPercent >= 70 ? '점검 중' : riskPercent >= 40 ? '접수 완료' : riskPercent >= 20 ? '모니터링' : '보수 완료',
+    expectedAction: riskPercent >= 70 ? '당일 내' : riskPercent >= 40 ? '1~2일 내' : riskPercent >= 20 ? '3~5일 내' : '관찰',
+  }
+}
+
+function buildRiskMapStats(zones: RiskMapHighZone[], latestResults: RiskGridResult[]): RiskMapStats {
+  const highRiskGrades = new Set<RiskMapHighZoneGrade>(['긴급', '매우 높음', '위험', '높음'])
+  const highRiskCount = zones.filter((zone) => zone.riskPercent >= 70 || highRiskGrades.has(zone.riskGrade)).length
+
+  return {
+    ...riskMapStats,
+    highRiskCount,
+    recentReportCount: latestResults.length || riskMapStats.recentReportCount,
+    highRiskDelta: Math.max(0, highRiskCount - riskMapStats.highRiskCount),
+  }
+}
 
 function FilterBar() {
   const [filterValues, setFilterValues] = useState<Record<RiskMapFilterId, string>>(defaultFilterValues)
@@ -376,32 +546,32 @@ function RiskLegendCard() {
   )
 }
 
-function RiskSummaryPanel() {
+function RiskSummaryPanel({ stats }: { stats: RiskMapStats }) {
   return (
     <aside className="grid gap-3 sm:grid-cols-2 xl:h-[560px] xl:grid-cols-1 xl:grid-rows-[132px_132px_132px_minmax(0,1fr)]">
       <StatSummaryCard
         title="오늘의 고위험 구간"
-        value={String(riskMapStats.highRiskCount)}
+        value={String(stats.highRiskCount)}
         unit="개 구간"
-        change={`▲ ${riskMapStats.highRiskDelta}`}
+        change={`▲ ${stats.highRiskDelta}`}
         color="red"
         icon={<Siren size={44} fill="currentColor" aria-hidden="true" />}
       />
       <StatSummaryCard
         title="최근 신고 수"
         caption="(최근 7일)"
-        value={String(riskMapStats.recentReportCount)}
+        value={String(stats.recentReportCount)}
         unit="건"
-        change={`▲ ${riskMapStats.reportDeltaPercent}%`}
+        change={`▲ ${stats.reportDeltaPercent}%`}
         color="blue"
         icon={<ReportFilePlusIcon />}
       />
       <StatSummaryCard
         title="AI 예측 정확도"
         caption="(최근 30일)"
-        value={riskMapStats.aiAccuracy.toFixed(1)}
+        value={stats.aiAccuracy.toFixed(1)}
         unit="%"
-        change={`▲ ${riskMapStats.accuracyDeltaPercent}%p`}
+        change={`▲ ${stats.accuracyDeltaPercent}%p`}
         color="teal"
         icon={<Cpu size={44} aria-hidden="true" />}
       />
@@ -485,7 +655,7 @@ function RiskHighZoneMobileCard({ zone }: { zone: RiskMapHighZone }) {
   )
 }
 
-function RiskHighZoneTable() {
+function RiskHighZoneTable({ zones }: { zones: RiskMapHighZone[] }) {
   return (
     <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,40,70,0.06)] sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -513,7 +683,7 @@ function RiskHighZoneTable() {
             </tr>
           </thead>
           <tbody>
-            {riskHighZones.map((zone) => (
+            {zones.map((zone) => (
               <tr key={zone.id} className="border-t border-slate-200 text-[13px]">
                 <td className="px-4 py-3">
                   <RiskGradeBadge grade={zone.riskGrade} />
@@ -543,7 +713,7 @@ function RiskHighZoneTable() {
       </div>
 
       <div className="grid gap-3 lg:hidden">
-        {riskHighZones.map((zone) => (
+        {zones.map((zone) => (
           <RiskHighZoneMobileCard key={zone.id} zone={zone} />
         ))}
       </div>
@@ -552,6 +722,54 @@ function RiskHighZoneTable() {
 }
 
 export function RiskMapPage() {
+  const [zones, setZones] = useState<RiskMapHighZone[]>(riskHighZones)
+  const [stats, setStats] = useState<RiskMapStats>(riskMapStats)
+  const [isRiskLoading, setIsRiskLoading] = useState(true)
+  const [riskNotice, setRiskNotice] = useState('')
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadRiskData() {
+      setIsRiskLoading(true)
+      setRiskNotice('')
+
+      const [latestResult, zonesResult] = await Promise.allSettled([
+        getLatestGridRiskResults(),
+        getRiskZones(),
+      ])
+
+      if (ignore) {
+        return
+      }
+
+      const latestRows = latestResult.status === 'fulfilled' ? latestResult.value : []
+      const zoneRows = zonesResult.status === 'fulfilled' ? zonesResult.value : []
+      const sourceRows = zoneRows.length > 0 ? zoneRows : latestRows
+      const apiZones = sourceRows.slice(0, 8).map(toRiskMapHighZone)
+
+      if (apiZones.length > 0) {
+        setZones(apiZones)
+        setStats(buildRiskMapStats(apiZones, latestRows))
+      } else {
+        setZones(riskHighZones)
+        setStats(riskMapStats)
+      }
+
+      if (latestResult.status === 'rejected' || zonesResult.status === 'rejected') {
+        setRiskNotice('위험도 API를 불러오지 못해 데모 데이터를 함께 표시합니다. 백엔드 Swagger에서 risk/dashboard 컨트롤러 노출 여부를 확인해 주세요.')
+      }
+
+      setIsRiskLoading(false)
+    }
+
+    void loadRiskData()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
   return (
     <div className="min-w-0">
       <div>
@@ -563,12 +781,18 @@ export function RiskMapPage() {
 
       <FilterBar />
 
+      {(isRiskLoading || riskNotice) && (
+        <p role="status" className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] font-bold leading-5 text-blue-700">
+          {isRiskLoading ? '위험도 데이터를 불러오는 중입니다.' : riskNotice}
+        </p>
+      )}
+
       <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_316px]">
         <RiskMapImagePanel />
-        <RiskSummaryPanel />
+        <RiskSummaryPanel stats={stats} />
       </div>
 
-      <RiskHighZoneTable />
+      <RiskHighZoneTable zones={zones} />
     </div>
   )
 }

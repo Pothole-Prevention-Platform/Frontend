@@ -3,6 +3,8 @@ export type UserRole = 'rider' | 'driver' | 'victim' | 'admin'
 export type * from './api'
 export type * from './report'
 export type * from './claim'
+export type * from './risk'
+export type * from './agency'
 
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
@@ -14,7 +16,7 @@ export type RiskMapFilterId = 'rainfall' | 'roadYear' | 'sewerAging' | 'undergro
 
 export type RiskMapGrade = 'safe' | 'attention' | 'caution' | 'danger'
 
-export type RiskMapHighZoneGrade = '긴급' | '주의' | '관심' | '안전/관찰'
+export type RiskMapHighZoneGrade = '긴급' | '주의' | '관심' | '안전/관찰' | '매우 높음' | '위험' | '높음' | '보통' | '낮음' | '안전'
 
 export type ReportSeverityId = 'low' | 'medium' | 'high' | 'critical'
 
