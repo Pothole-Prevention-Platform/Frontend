@@ -19,13 +19,12 @@ import {
 } from 'lucide-react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getApiBaseUrl } from '../api/apiClient'
-import { getCitizenReport } from '../api/reportApi'
+import { getCitizenReport, getCitizenReports } from '../api/reportApi'
 import {
   aiAnalysisSteps,
   aiDetectedFeatures,
   aiRecommendedActions,
   aiReviewResult,
-  recentAiResults,
 } from '../data/mockData'
 import type { AiDetectedFeature, AiRecommendedAction, AiReviewIconName, RecentAiResult } from '../types'
 import type { CitizenReportResponse, ReportAgencyResult, ReportAiResult } from '../types/report'
@@ -212,6 +211,13 @@ function normalizePercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(percent)))
 }
 
+function percentLevel(percent: number): RecentAiResult['level'] {
+  if (percent >= 90) return '매우 높음'
+  if (percent >= 70) return '높음'
+  if (percent >= 40) return '보통'
+  return '낮음'
+}
+
 function optionalNumber(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
@@ -272,6 +278,16 @@ function resolveReportImageUrl(imageUrl: string | undefined) {
 
   const normalizedPath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`
   return `${getApiBaseUrl()}${normalizedPath}`
+}
+
+function formatRecentDate(value: string | null | undefined) {
+  if (!value) {
+    return '시간 정보 없음'
+  }
+
+  const normalized = value.replace('T', ' ')
+  const datePart = normalized.slice(0, 16)
+  return datePart ? datePart.replaceAll('-', '.') : value
 }
 
 function getLocalImageUrl(locationState: unknown, reportId: string) {
@@ -484,6 +500,26 @@ function mapReportToReviewData(report: CitizenReportResponse): AiReviewViewData 
     imageSources: imageUrl ? [imageUrl] : [],
     features,
     isAnalysisPending: !hasAiAnalysis,
+  }
+}
+
+function mapReportToRecentResult(report: CitizenReportResponse): RecentAiResult {
+  const confidence = optionalNumber(report.confidence)
+  const percent = confidence === undefined ? 0 : normalizePercent(confidence)
+  const imageUrl = resolveReportImageUrl(optionalString(report.imageUrl))
+  const location =
+    [optionalString(report.address), optionalString(report.locationDetail)].filter(Boolean).join(' · ') ||
+    optionalString(report.location) ||
+    optionalString(report.managingAuthority) ||
+    '위치 정보 없음'
+
+  return {
+    id: report.reportId ?? report.id ?? `${location}-${formatRecentDate(report.submittedAt ?? report.createdAt)}`,
+    thumbnailSources: imageUrl ? [imageUrl] : [],
+    percent,
+    level: percentLevel(percent),
+    location,
+    date: formatRecentDate(report.submittedAt ?? report.createdAt ?? report.reportedAt),
   }
 }
 
@@ -875,8 +911,8 @@ function RecentResultItem({ item, index }: { item: RecentAiResult; index: number
     >
       <div className="h-[66px] w-[76px] overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
         <AssetImage
-          key={`empty-recent-${item.id}`}
-          sources={[]}
+          key={`recent-${item.id}`}
+          sources={item.thumbnailSources}
           alt={`${item.location} AI 판별 결과 사진`}
           className="h-full w-full object-cover"
           fallback={<BlankImageSpace compact />}
@@ -903,6 +939,34 @@ function RecentResultItem({ item, index }: { item: RecentAiResult; index: number
 }
 
 function RecentResultsPanel({ onNotice }: { onNotice: (message: string) => void }) {
+  const [recentResults, setRecentResults] = useState<RecentAiResult[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let isActive = true
+
+    getCitizenReports(4)
+      .then((reports) => {
+        if (!isActive) return
+        setRecentResults(reports.map(mapReportToRecentResult))
+      })
+      .catch((error) => {
+        if (!isActive) return
+        const message = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+        setRecentResults([])
+        onNotice(`최근 판별 결과를 불러오지 못했습니다. (${message})`)
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [onNotice])
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_16px_40px_rgba(15,40,70,0.06)]">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -921,9 +985,19 @@ function RecentResultsPanel({ onNotice }: { onNotice: (message: string) => void 
       </div>
 
       <div className="space-y-3">
-        {recentAiResults.map((item, index) => (
-          <RecentResultItem key={item.id} item={item} index={index} />
-        ))}
+        {isLoading ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-[13px] font-bold text-slate-500">
+            최근 판별 결과를 불러오는 중입니다.
+          </div>
+        ) : recentResults.length > 0 ? (
+          recentResults.map((item, index) => (
+            <RecentResultItem key={item.id} item={item} index={index} />
+          ))
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-5 text-[13px] font-bold text-slate-500">
+            저장된 판별 결과가 없습니다.
+          </div>
+        )}
       </div>
 
       <button
