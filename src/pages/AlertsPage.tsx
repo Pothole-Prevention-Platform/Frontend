@@ -1,17 +1,18 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   CheckCircle2,
   ChevronRight,
   CloudRain,
   Info,
-  LocateFixed,
-  Minus,
-  Plus,
   RefreshCcw,
   Settings,
   Volume2,
 } from 'lucide-react'
+import {
+  getLatestGridRiskResults,
+  getRiskZones,
+} from '../api/riskApi'
 import {
   alertSettings,
   alertToggleSettings,
@@ -19,6 +20,7 @@ import {
   recentDangerAlerts,
   routePreview,
 } from '../data/mockData'
+import { KakaoAlertRouteMap } from '../components/alerts/KakaoAlertRouteMap'
 import type {
   AlertRiskLevel,
   AlertSettingDay,
@@ -26,12 +28,28 @@ import type {
   AlertToggleType,
   CurrentDangerAlert,
   RecentDangerAlert,
+  RoutePreview,
 } from '../types'
+import type { RiskGridResult } from '../types/risk'
 import { cn } from '../utils/cn'
 
 const dayOptions: AlertSettingDay[] = ['매일', '평일', '주말']
 
 const timeOptions = ['21:00', '22:00', '23:00', '06:00', '07:00', '08:00']
+
+const ALERT_SETTINGS_STORAGE_KEY = 'pothole-alert-settings-v1'
+const ALERT_FALLBACK_NOTICE = '현재 로컬 위험도 계산 결과가 없어 예시 알림 데이터를 표시하고 있습니다.'
+const SEOUL_CITY_HALL = {
+  lat: 37.5665,
+  lng: 126.978,
+}
+
+const fallbackAlertCoordinates = [
+  { lat: 37.501274, lng: 127.039585 },
+  { lat: 37.508139, lng: 127.033414 },
+  { lat: 37.52322, lng: 127.03742 },
+  { lat: 37.497952, lng: 127.027619 },
+] as const
 
 const radiusMarks = [
   { value: 100, label: '100m' },
@@ -40,6 +58,34 @@ const radiusMarks = [
   { value: 1000, label: '1km' },
   { value: 2000, label: '2km' },
 ] as const
+
+type LiveAlertSource = 'api' | 'fallback'
+
+type LiveDangerAlert = CurrentDangerAlert & {
+  calculatedAt?: string
+  centerLat?: number
+  centerLng?: number
+  gridCode?: string
+  riskScore?: number
+  source: LiveAlertSource
+}
+
+type RerouteState = {
+  appliedAt: string
+  avoidedAlertId: string
+  avoidedLocation: string
+  extraDistanceMeters: number
+  extraMinutes: number
+}
+
+type SavedAlertSettings = {
+  quietEnd: string
+  quietHoursEnabled: boolean
+  quietStart: string
+  radiusMeters: number
+  selectedDay: AlertSettingDay
+  toggleStates: Record<AlertToggleType, boolean>
+}
 
 const riskStyles: Record<
   AlertRiskLevel,
@@ -90,14 +136,345 @@ function createToggleState(settings: AlertToggleSetting[]): Record<AlertToggleTy
   return state
 }
 
+function getDefaultAlertSettings(): SavedAlertSettings {
+  return {
+    quietEnd: alertSettings.quietEndTime,
+    quietHoursEnabled: alertSettings.quietHoursEnabled,
+    quietStart: alertSettings.quietStartTime,
+    radiusMeters: alertSettings.alertRadiusMeters,
+    selectedDay: alertSettings.selectedDays,
+    toggleStates: createToggleState(alertToggleSettings),
+  }
+}
+
+function isAlertSettingDay(value: unknown): value is AlertSettingDay {
+  return typeof value === 'string' && dayOptions.includes(value as AlertSettingDay)
+}
+
+function isAlertToggleStates(value: unknown): value is Record<AlertToggleType, boolean> {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const candidate = value as Record<string, unknown>
+  return ['push', 'voice', 'rain'].every((key) => typeof candidate[key] === 'boolean')
+}
+
+function readSavedAlertSettings() {
+  if (typeof window === 'undefined') {
+    return getDefaultAlertSettings()
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(ALERT_SETTINGS_STORAGE_KEY)
+
+    if (!rawValue) {
+      return getDefaultAlertSettings()
+    }
+
+    const parsed = JSON.parse(rawValue) as Partial<SavedAlertSettings>
+    const defaults = getDefaultAlertSettings()
+    const radiusMeters = typeof parsed.radiusMeters === 'number' && Number.isFinite(parsed.radiusMeters)
+      ? parsed.radiusMeters
+      : defaults.radiusMeters
+
+    return {
+      quietEnd: typeof parsed.quietEnd === 'string' ? parsed.quietEnd : defaults.quietEnd,
+      quietHoursEnabled: typeof parsed.quietHoursEnabled === 'boolean' ? parsed.quietHoursEnabled : defaults.quietHoursEnabled,
+      quietStart: typeof parsed.quietStart === 'string' ? parsed.quietStart : defaults.quietStart,
+      radiusMeters,
+      selectedDay: isAlertSettingDay(parsed.selectedDay) ? parsed.selectedDay : defaults.selectedDay,
+      toggleStates: isAlertToggleStates(parsed.toggleStates) ? parsed.toggleStates : defaults.toggleStates,
+    }
+  } catch {
+    return getDefaultAlertSettings()
+  }
+}
+
 function radiusIndexFromMeters(radiusMeters: number) {
   const foundIndex = radiusMarks.findIndex((mark) => mark.value === radiusMeters)
 
   return foundIndex >= 0 ? foundIndex : 2
 }
 
-function formatMeters(distanceMeters: number) {
-  return `${distanceMeters}m`
+function formatDistance(distanceMeters: number) {
+  if (distanceMeters >= 1000) {
+    return `${(distanceMeters / 1000).toFixed(1)}km`
+  }
+
+  return `${Math.max(0, Math.round(distanceMeters))}m`
+}
+
+function getNumberField(result: RiskGridResult, keys: string[]) {
+  for (const key of keys) {
+    const value = result[key]
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+function getStringField(result: RiskGridResult, keys: string[]) {
+  for (const key of keys) {
+    const value = result[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return undefined
+}
+
+function clampPercent(value: number) {
+  return Math.min(100, Math.max(0, Math.round(value)))
+}
+
+function normalizeRiskScore(result: RiskGridResult) {
+  const rawScore = getNumberField(result, ['riskScore', 'score', 'riskPercent', 'value'])
+
+  if (rawScore === undefined) {
+    const probability = getNumberField(result, ['probability'])
+    return probability === undefined ? 0 : clampPercent(probability * 100)
+  }
+
+  return clampPercent(rawScore)
+}
+
+function getAlertRiskLevel(result: RiskGridResult): AlertRiskLevel {
+  const rawLevel = getStringField(result, ['riskLevel', 'riskGrade', 'grade', 'level'])
+  const normalizedLevel = rawLevel?.toUpperCase()
+
+  if (rawLevel === '위험' || rawLevel === '긴급' || normalizedLevel === 'DANGER') {
+    return 'danger'
+  }
+
+  if (rawLevel === '주의' || normalizedLevel === 'WARNING' || normalizedLevel === 'CAUTION') {
+    return 'caution'
+  }
+
+  if (rawLevel === '관심' || normalizedLevel === 'ATTENTION') {
+    return 'attention'
+  }
+
+  if (rawLevel === '안전' || normalizedLevel === 'SAFE') {
+    return 'safe'
+  }
+
+  const riskScore = normalizeRiskScore(result)
+
+  if (riskScore >= 70) {
+    return 'danger'
+  }
+
+  if (riskScore >= 40) {
+    return 'caution'
+  }
+
+  if (riskScore >= 20) {
+    return 'attention'
+  }
+
+  return 'safe'
+}
+
+function getAlertRiskLabel(riskLevel: AlertRiskLevel) {
+  const labels: Record<AlertRiskLevel, string> = {
+    danger: '위험',
+    caution: '주의',
+    attention: '관심',
+    safe: '안전',
+  }
+
+  return labels[riskLevel]
+}
+
+function getRiskSortValue(riskLevel: AlertRiskLevel, riskScore: number) {
+  const riskLevelWeight: Record<AlertRiskLevel, number> = {
+    danger: 400,
+    caution: 300,
+    attention: 200,
+    safe: 100,
+  }
+
+  return riskLevelWeight[riskLevel] + riskScore
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180
+}
+
+function getDistanceMeters(lat: number, lng: number) {
+  const earthRadiusMeters = 6371000
+  const deltaLat = toRadians(lat - SEOUL_CITY_HALL.lat)
+  const deltaLng = toRadians(lng - SEOUL_CITY_HALL.lng)
+  const startLat = toRadians(SEOUL_CITY_HALL.lat)
+  const targetLat = toRadians(lat)
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(startLat) * Math.cos(targetLat) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
+  return Math.round(earthRadiusMeters * c)
+}
+
+function formatRelativeTime(value: string | undefined, fallbackMinutes: number) {
+  if (!value) {
+    return fallbackMinutes === 0 ? '방금 전' : `${fallbackMinutes}분 전`
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return fallbackMinutes === 0 ? '방금 전' : `${fallbackMinutes}분 전`
+  }
+
+  const diffMinutes = Math.max(0, Math.round((Date.now() - date.getTime()) / 60000))
+
+  if (diffMinutes < 1) {
+    return '방금 전'
+  }
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}분 전`
+  }
+
+  if (diffMinutes < 24 * 60) {
+    return `${Math.round(diffMinutes / 60)}시간 전`
+  }
+
+  return `${Math.round(diffMinutes / (24 * 60))}일 전`
+}
+
+function formatAlertTime(value: string | undefined) {
+  const date = value ? new Date(value) : new Date()
+
+  if (Number.isNaN(date.getTime())) {
+    return new Intl.DateTimeFormat('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date())
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function toLiveAlert(result: RiskGridResult, index: number): LiveDangerAlert | undefined {
+  const centerLat = getNumberField(result, ['centerLat'])
+  const centerLng = getNumberField(result, ['centerLng'])
+
+  if (centerLat === undefined || centerLng === undefined) {
+    return undefined
+  }
+
+  const riskScore = normalizeRiskScore(result)
+  const riskLevel = getAlertRiskLevel(result)
+  const badgeLabel = getAlertRiskLabel(riskLevel)
+  const distanceMeters = getDistanceMeters(centerLat, centerLng)
+  const gridCode = getStringField(result, ['gridCode', 'gridId'])
+  const districtName = getStringField(result, ['districtName', 'district', 'guName']) ?? '자치구 미확인'
+  const direction = riskLevel === 'safe' ? '관찰 구간' : '진행 경로 인근'
+
+  return {
+    badgeLabel,
+    calculatedAt: result.calculatedAt ?? result.updatedAt,
+    centerLat,
+    centerLng,
+    direction,
+    distanceMeters,
+    gridCode,
+    id: gridCode ?? `risk-alert-api-${index}`,
+    location: gridCode ? `${districtName} ${gridCode}` : districtName,
+    riskLevel,
+    riskScore,
+    source: 'api',
+    title: `전방 ${formatDistance(distanceMeters)} 포트홀 ${badgeLabel} 구간`,
+  }
+}
+
+function toFallbackLiveAlerts() {
+  const currentCoordinate = fallbackAlertCoordinates[0]
+
+  return [
+    {
+      ...currentDangerAlert,
+      centerLat: currentCoordinate.lat,
+      centerLng: currentCoordinate.lng,
+      riskScore: 83,
+      source: 'fallback' as const,
+    },
+    ...recentDangerAlerts
+      .filter((alert) => alert.riskLevel !== 'safe' && alert.title !== currentDangerAlert.title)
+      .map((alert, index) => ({
+        badgeLabel: alert.riskLabel,
+        centerLat: fallbackAlertCoordinates[index + 1]?.lat ?? currentCoordinate.lat,
+        centerLng: fallbackAlertCoordinates[index + 1]?.lng ?? currentCoordinate.lng,
+        direction: alert.detail.split('|')[1]?.trim() ?? '진행 경로 인근',
+        distanceMeters: Number.parseInt(alert.distanceText.replace(/[^\d]/g, ''), 10) || (index + 2) * 120,
+        id: `fallback-${alert.id}`,
+        location: alert.detail.split('|')[0]?.trim() ?? alert.title,
+        riskLevel: alert.riskLevel,
+        riskScore: Math.max(20, 72 - index * 14),
+        source: 'fallback' as const,
+        title: alert.title,
+      })),
+  ]
+}
+
+function toRecentAlert(alert: LiveDangerAlert, index: number, reroutedAlertIds: Set<string>): RecentDangerAlert {
+  const isRerouted = reroutedAlertIds.has(alert.id)
+
+  return {
+    detail: `${alert.location} | ${alert.direction}`,
+    distanceText: isRerouted ? '우회 완료' : formatDistance(alert.distanceMeters),
+    id: `recent-${alert.id}`,
+    relativeTime: isRerouted ? '방금 전' : formatRelativeTime(alert.calculatedAt, index * 4),
+    riskLabel: isRerouted ? '안전' : alert.badgeLabel,
+    riskLevel: isRerouted ? 'safe' : alert.riskLevel,
+    statusText: isRerouted ? '우회 완료' : undefined,
+    time: formatAlertTime(alert.calculatedAt),
+    title: isRerouted ? `${alert.location} 우회 경로 적용` : alert.title,
+  }
+}
+
+function buildSafeAlert(avoidedLocation?: string): LiveDangerAlert {
+  return {
+    badgeLabel: '안전',
+    centerLat: fallbackAlertCoordinates[3].lat,
+    centerLng: fallbackAlertCoordinates[3].lng,
+    direction: avoidedLocation ? `${avoidedLocation} 우회 완료` : '현재 경로',
+    distanceMeters: 0,
+    id: 'safe-route-alert',
+    location: '현재 경로',
+    riskLevel: 'safe',
+    riskScore: 0,
+    source: 'api',
+    title: '현재 경로 주변 위험 구간 없음',
+  }
+}
+
+function getRoutePreview(alert: LiveDangerAlert, rerouteState: RerouteState | null): RoutePreview {
+  const baseDistanceKm = Math.max(1.2, alert.distanceMeters / 1000 + 1.8)
+  const extraDistanceKm = rerouteState ? rerouteState.extraDistanceMeters / 1000 : 0
+  const remainingDistance = `${(baseDistanceKm + extraDistanceKm).toFixed(1)} km`
+  const estimatedMinutes = Math.max(4, Math.round(((baseDistanceKm + extraDistanceKm) / 22) * 60) + (rerouteState?.extraMinutes ?? 0))
+  const arrival = new Date(Date.now() + estimatedMinutes * 60000)
+  const estimatedArrival = new Intl.DateTimeFormat('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(arrival)
+
+  return {
+    ...routePreview,
+    estimatedArrival,
+    remainingDistance,
+  }
 }
 
 function WarningTriangleIcon({ className }: { className?: string }) {
@@ -122,35 +499,6 @@ function WarningLineIcon({ className }: { className?: string }) {
       />
       <path d="M12 8v5.7" stroke="currentColor" strokeLinecap="round" strokeWidth="2.4" />
       <circle cx="12" cy="17" r="1.2" fill="currentColor" />
-    </svg>
-  )
-}
-
-function MapPinIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 44 56" className={className} aria-hidden="true">
-      <path
-        d="M22 3C11.8 3 3.6 11.2 3.6 21.3 3.6 36 22 53 22 53s18.4-17 18.4-31.7C40.4 11.2 32.2 3 22 3Z"
-        fill="currentColor"
-        stroke="#fff"
-        strokeWidth="4"
-      />
-      <circle cx="22" cy="21.5" r="6.4" fill="#fff" />
-    </svg>
-  )
-}
-
-function DangerMapPinIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 58 70" className={className} aria-hidden="true">
-      <path
-        d="M29 3C15.8 3 5.2 13.5 5.2 26.5 5.2 45.1 29 67 29 67s23.8-21.9 23.8-40.5C52.8 13.5 42.2 3 29 3Z"
-        fill="currentColor"
-        stroke="#fff"
-        strokeWidth="5"
-      />
-      <circle cx="29" cy="27" r="10" fill="#fff" />
-      <circle cx="29" cy="27" r="4.8" fill="currentColor" />
     </svg>
   )
 }
@@ -236,9 +584,11 @@ function MockNotice({ message }: { message: string }) {
 
 function DangerBanner({
   alert,
+  isRerouted,
   onReroute,
 }: {
   alert: CurrentDangerAlert
+  isRerouted: boolean
   onReroute: () => void
 }) {
   return (
@@ -254,7 +604,7 @@ function DangerBanner({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="min-w-0 max-w-full text-[19px] font-black leading-tight text-[#07182F] sm:text-[21px]">
-              전방 <span className="text-red-600">{formatMeters(alert.distanceMeters)}</span> 포트홀 위험 구간
+              {alert.title}
             </h2>
             <RiskBadge riskLevel={alert.riskLevel} label={alert.badgeLabel} />
           </div>
@@ -267,179 +617,17 @@ function DangerBanner({
       <div className="flex flex-col gap-3 border-red-100 pt-1 sm:flex-row sm:items-center sm:justify-end sm:gap-6 md:border-l md:pl-7">
         <div className="text-left sm:text-center">
           <p className="text-[12px] font-black text-slate-500">위험 지점까지</p>
-          <p className="mt-1 text-[30px] font-black leading-none text-red-600 sm:text-[32px]">{formatMeters(alert.distanceMeters)}</p>
+          <p className="mt-1 text-[30px] font-black leading-none text-red-600 sm:text-[32px]">{formatDistance(alert.distanceMeters)}</p>
         </div>
         <button
           type="button"
           onClick={onReroute}
-          className="h-11 rounded-xl bg-gradient-to-r from-[#075ED5] to-[#0068E8] px-7 text-[15px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(0,95,220,0.25)] sm:h-12"
+          disabled={isRerouted || alert.riskLevel === 'safe'}
+          className="h-11 rounded-xl bg-gradient-to-r from-[#075ED5] to-[#0068E8] px-7 text-[15px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_32px_rgba(0,95,220,0.25)] disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-400 disabled:shadow-none disabled:hover:translate-y-0 sm:h-12"
         >
-          경로 재탐색
+          {isRerouted ? '우회 적용됨' : '경로 재탐색'}
         </button>
       </div>
-    </section>
-  )
-}
-
-function RouteMarker({
-  className,
-  label,
-  tone,
-}: {
-  className: string
-  label: string
-  tone: 'green' | 'orange' | 'red'
-}) {
-  const markerClass = {
-    green: 'text-green-500',
-    orange: 'text-orange-500',
-    red: 'text-red-600',
-  }[tone]
-
-  return (
-    <div
-      role="img"
-      aria-label={label}
-      className={cn('absolute z-20 flex -translate-x-1/2 -translate-y-full items-center justify-center', className)}
-    >
-      {tone === 'red' && <span className="absolute top-2 h-12 w-12 rounded-full bg-red-500/20" aria-hidden="true" />}
-      <MapPinIcon className={cn('relative h-10 w-10 drop-shadow-[0_8px_12px_rgba(15,23,42,0.18)]', markerClass)} />
-    </div>
-  )
-}
-
-function FallbackRouteMap() {
-  const mapLabels = [
-    ['강남역', 'left-[24%] top-[13%]'],
-    ['선릉역', 'left-[30%] top-[51%]'],
-    ['역삼1동', 'left-[35%] top-[72%]'],
-    ['도곡공원', 'left-[58%] top-[31%]'],
-    ['한티역', 'right-[18%] top-[14%]'],
-    ['연주역', 'left-[59%] bottom-[19%]'],
-    ['도곡1동', 'right-[8%] bottom-[23%]'],
-  ] as const
-
-  return (
-    <div
-      role="img"
-      aria-label="실시간 위험 알림 경로 지도 미리보기"
-      className="absolute inset-0 overflow-hidden bg-[#F4F8FC]"
-    >
-      <div
-        className="absolute inset-0 opacity-80"
-        style={{
-          backgroundImage:
-            'linear-gradient(90deg, rgba(148, 163, 184, 0.16) 1px, transparent 1px), linear-gradient(rgba(148, 163, 184, 0.16) 1px, transparent 1px)',
-          backgroundSize: '34px 34px',
-        }}
-      />
-
-      <div className="absolute left-[7%] top-[2%] h-[92%] w-[8%] rotate-[-8deg] rounded-[24px] bg-emerald-100/70" />
-      <div className="absolute right-[10%] top-[46%] h-[27%] w-[16%] rotate-[-18deg] rounded-[28px] bg-emerald-100/70" />
-      <div className="absolute left-[53%] top-[23%] h-[20%] w-[15%] rotate-[-12deg] rounded-[24px] bg-emerald-100/70" />
-      <div className="absolute right-[4%] bottom-[8%] h-[21%] w-[15%] rotate-[12deg] rounded-[28px] bg-sky-100/85" />
-
-      <div className="absolute -left-[8%] top-[20%] h-4 w-[120%] rotate-[-10deg] rounded-full bg-white shadow-[0_0_0_2px_rgba(226,232,240,0.95)]" />
-      <div className="absolute -left-[7%] top-[65%] h-4 w-[118%] rotate-[8deg] rounded-full bg-white shadow-[0_0_0_2px_rgba(226,232,240,0.95)]" />
-      <div className="absolute left-[18%] top-[-18%] h-[138%] w-3 rotate-[-13deg] rounded-full bg-white shadow-[0_0_0_2px_rgba(226,232,240,0.92)]" />
-      <div className="absolute left-[49%] top-[-20%] h-[145%] w-3 rotate-[5deg] rounded-full bg-white shadow-[0_0_0_2px_rgba(226,232,240,0.92)]" />
-      <div className="absolute right-[15%] top-[-24%] h-[150%] w-3 rotate-[28deg] rounded-full bg-white shadow-[0_0_0_2px_rgba(226,232,240,0.92)]" />
-
-      <div className="absolute left-[16%] top-[41%] h-2.5 w-[48%] rotate-[1deg] rounded-full bg-slate-200/80" />
-      <div className="absolute left-[41%] top-[37%] h-[38%] w-2.5 rotate-[-9deg] rounded-full bg-slate-200/75" />
-      <div className="absolute left-[64%] top-[30%] h-2.5 w-[26%] rotate-[-8deg] rounded-full bg-slate-200/75" />
-      <div className="absolute left-[31%] top-[31%] h-[34%] w-2.5 rotate-[17deg] rounded-full bg-slate-200/75" />
-
-      <div className="absolute left-[12%] top-[6%] h-[88%] w-4 rotate-[-13deg] rounded-full bg-green-100 shadow-[0_0_0_7px_rgba(255,255,255,0.52)]" />
-      <div className="absolute right-[9%] top-[-24%] h-[145%] w-4 rotate-[28deg] rounded-full bg-blue-100 shadow-[0_0_0_7px_rgba(255,255,255,0.52)]" />
-
-      {mapLabels.map(([label, position]) => (
-        <span key={label} className={cn('absolute z-10 rounded-md bg-white/60 px-1.5 py-0.5 text-[11px] font-black text-slate-600 sm:text-[13px]', position)}>
-          {label}
-        </span>
-      ))}
-
-      <svg className="absolute inset-0 z-10 h-full w-full" viewBox="0 0 1200 320" preserveAspectRatio="none" aria-hidden="true">
-        <path
-          d="M410 20 L470 158 L610 148 L640 216 L790 184 L955 138 L1185 82"
-          fill="none"
-          stroke="#2487EB"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="9"
-        />
-        <path
-          d="M410 20 L470 158 L610 148 L640 216 L790 184 L955 138 L1185 82"
-          fill="none"
-          stroke="rgba(255,255,255,0.72)"
-          strokeDasharray="8 20"
-          strokeLinecap="round"
-          strokeWidth="2.4"
-        />
-      </svg>
-
-      <div className="absolute left-[32%] top-[30%] z-20 -translate-x-1/2 -translate-y-1/2 text-red-600 sm:top-[45%]">
-        <span className="absolute left-1/2 top-1/2 h-[62px] w-[62px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500/20 sm:h-[74px] sm:w-[74px]" />
-        <span className="absolute left-1/2 top-1/2 h-[42px] w-[42px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-red-500/30 sm:h-[48px] sm:w-[48px]" />
-        <DangerMapPinIcon className="relative h-[54px] w-[54px] drop-shadow-[0_18px_26px_rgba(220,38,38,0.32)] sm:h-[64px] sm:w-[64px]" />
-      </div>
-
-      <RouteMarker className="left-[27%] top-[15%]" tone="green" label="출발 지점" />
-      <RouteMarker className="left-[38%] top-[36%] sm:top-[50%]" tone="red" label="위험 지점" />
-      <RouteMarker className="left-[46%] top-[50%] sm:top-[64%]" tone="orange" label="주의 지점" />
-      <RouteMarker className="left-[73%] top-[50%]" tone="orange" label="주의 지점" />
-      <RouteMarker className="left-[95%] top-[31%]" tone="green" label="도착 지점" />
-    </div>
-  )
-}
-
-function RouteMapPreview({ onDetailRoute }: { onDetailRoute: () => void }) {
-  return (
-    <section className="relative mt-4 h-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_16px_40px_rgba(15,40,70,0.08)] sm:h-[270px] lg:h-[270px]">
-      <FallbackRouteMap />
-
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-slate-900/5" />
-
-      <div className="absolute left-3 top-3 w-[126px] rounded-xl bg-white/95 p-4 shadow-[0_14px_32px_rgba(15,40,70,0.15)] backdrop-blur sm:left-5 sm:top-5 sm:w-[138px]">
-        <p className="text-[12px] font-black text-slate-500 sm:text-[13px]">예상 도착</p>
-        <p className="mt-2 text-[26px] font-black leading-none text-blue-700">{routePreview.estimatedArrival}</p>
-        <p className="mt-4 text-[12px] font-black text-slate-500 sm:text-[13px]">남은 거리</p>
-        <p className="mt-1 text-[20px] font-black text-[#07182F]">{routePreview.remainingDistance}</p>
-        <div className="my-4 h-px bg-slate-200" />
-        <button
-          type="button"
-          onClick={onDetailRoute}
-          className="flex items-center gap-1 text-[13px] font-black text-blue-700 transition hover:text-blue-500"
-        >
-          상세 경로 보기
-          <ChevronRight size={15} aria-hidden="true" />
-        </button>
-      </div>
-
-      <div className="absolute right-4 top-[92px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-md sm:top-[128px]">
-        <button
-          type="button"
-          aria-label="지도 확대"
-          className="flex h-11 w-11 items-center justify-center border-b border-slate-200 text-slate-700 transition hover:bg-blue-50"
-        >
-          <Plus size={20} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          aria-label="지도 축소"
-          className="flex h-11 w-11 items-center justify-center text-slate-700 transition hover:bg-blue-50"
-        >
-          <Minus size={20} aria-hidden="true" />
-        </button>
-      </div>
-
-      <button
-        type="button"
-        aria-label="현재 위치 보기"
-        className="absolute bottom-4 right-4 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-md transition hover:bg-blue-50"
-      >
-        <LocateFixed size={20} aria-hidden="true" />
-      </button>
     </section>
   )
 }
@@ -533,7 +721,19 @@ function RecentAlertRow({
   )
 }
 
-function RecentDangerAlertList({ onShowAll, onSelectAlert }: { onShowAll: () => void; onSelectAlert: (alert: RecentDangerAlert) => void }) {
+function RecentDangerAlertList({
+  alerts,
+  isExpanded,
+  onShowAll,
+  onSelectAlert,
+}: {
+  alerts: RecentDangerAlert[]
+  isExpanded: boolean
+  onShowAll: () => void
+  onSelectAlert: (alert: RecentDangerAlert) => void
+}) {
+  const visibleAlerts = isExpanded ? alerts : alerts.slice(0, 4)
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_34px_rgba(15,40,70,0.06)]">
       <div className="mb-4 flex items-center gap-2">
@@ -544,7 +744,7 @@ function RecentDangerAlertList({ onShowAll, onSelectAlert }: { onShowAll: () => 
       </div>
 
       <div className="space-y-3 xl:space-y-2.5">
-        {recentDangerAlerts.map((alert) => (
+        {visibleAlerts.map((alert) => (
           <RecentAlertRow key={alert.id} alert={alert} onClick={() => onSelectAlert(alert)} />
         ))}
       </div>
@@ -554,7 +754,7 @@ function RecentDangerAlertList({ onShowAll, onSelectAlert }: { onShowAll: () => 
         onClick={onShowAll}
         className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[14px] font-black text-blue-700 transition hover:bg-blue-50 xl:mt-3"
       >
-        전체 알림 보기
+        {isExpanded ? '주요 알림만 보기' : '전체 알림 보기'}
         <ChevronRight size={16} aria-hidden="true" />
       </button>
     </section>
@@ -708,55 +908,219 @@ function AlertSettingsPanel({
 }
 
 export function AlertsPage() {
-  const [toggleStates, setToggleStates] = useState<Record<AlertToggleType, boolean>>(() => createToggleState(alertToggleSettings))
-  const [quietHoursEnabled, setQuietHoursEnabled] = useState(alertSettings.quietHoursEnabled)
-  const [quietStart, setQuietStart] = useState(alertSettings.quietStartTime)
-  const [quietEnd, setQuietEnd] = useState(alertSettings.quietEndTime)
-  const [selectedDay, setSelectedDay] = useState<AlertSettingDay>(alertSettings.selectedDays)
-  const [radiusIndex, setRadiusIndex] = useState(radiusIndexFromMeters(alertSettings.alertRadiusMeters))
+  const [settingsState, setSettingsState] = useState<SavedAlertSettings>(() => readSavedAlertSettings())
+  const [alerts, setAlerts] = useState<LiveDangerAlert[]>(() => toFallbackLiveAlerts())
+  const [activeAlertId, setActiveAlertId] = useState(currentDangerAlert.id)
+  const [reroutedAlertIds, setReroutedAlertIds] = useState<Set<string>>(() => new Set())
+  const [rerouteState, setRerouteState] = useState<RerouteState | null>(null)
+  const [isAlertLoading, setIsAlertLoading] = useState(true)
+  const [alertDataNotice, setAlertDataNotice] = useState('')
   const [mockNotice, setMockNotice] = useState('')
+  const [showAllAlerts, setShowAllAlerts] = useState(false)
+  const radiusIndex = radiusIndexFromMeters(settingsState.radiusMeters)
+
+  const persistSettingsNotice = useCallback(() => {
+    setMockNotice('알림 설정이 저장되었습니다.')
+  }, [])
+
+  const updateSettings = useCallback((updater: (current: SavedAlertSettings) => SavedAlertSettings) => {
+    setSettingsState((current) => updater(current))
+    persistSettingsNotice()
+  }, [persistSettingsNotice])
+
+  const loadAlerts = useCallback(async () => {
+    setIsAlertLoading(true)
+    setAlertDataNotice('')
+
+    const [zonesResult, latestResult] = await Promise.allSettled([
+      getRiskZones(),
+      getLatestGridRiskResults(),
+    ])
+
+    const zoneRows = zonesResult.status === 'fulfilled' ? zonesResult.value : []
+    const latestRows = latestResult.status === 'fulfilled' ? latestResult.value : []
+    const sourceRows = zoneRows.length > 0 ? zoneRows : latestRows
+    const apiAlerts = sourceRows
+      .map(toLiveAlert)
+      .filter((alert): alert is LiveDangerAlert => alert !== undefined)
+      .sort((a, b) => {
+        const riskDiff = getRiskSortValue(b.riskLevel, b.riskScore ?? 0) - getRiskSortValue(a.riskLevel, a.riskScore ?? 0)
+        return riskDiff === 0 ? a.distanceMeters - b.distanceMeters : riskDiff
+      })
+      .slice(0, 8)
+
+    if (apiAlerts.length > 0) {
+      setAlerts(apiAlerts)
+      setActiveAlertId(apiAlerts[0].id)
+      setAlertDataNotice('')
+    } else {
+      const fallbackAlerts = toFallbackLiveAlerts()
+      setAlerts(fallbackAlerts)
+      setActiveAlertId(fallbackAlerts[0]?.id ?? currentDangerAlert.id)
+      setAlertDataNotice(ALERT_FALLBACK_NOTICE)
+    }
+
+    if (zonesResult.status === 'rejected' && latestResult.status === 'rejected') {
+      setAlertDataNotice('위험도 API 연결에 실패해 예시 알림 데이터를 표시하고 있습니다.')
+    }
+
+    setRerouteState(null)
+    setReroutedAlertIds(new Set())
+    setIsAlertLoading(false)
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadAlerts()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [loadAlerts])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(ALERT_SETTINGS_STORAGE_KEY, JSON.stringify(settingsState))
+  }, [settingsState])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== ALERT_SETTINGS_STORAGE_KEY) {
+        return
+      }
+
+      setSettingsState(readSavedAlertSettings())
+      setMockNotice('다른 창에서 변경한 알림 설정을 반영했습니다.')
+    }
+
+    window.addEventListener('storage', handleStorage)
+
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
+
+  const activeAlert = useMemo(() => {
+    return alerts.find((alert) => alert.id === activeAlertId) ?? alerts[0] ?? buildSafeAlert()
+  }, [activeAlertId, alerts])
+
+  const routeSummary = useMemo(() => getRoutePreview(activeAlert, rerouteState), [activeAlert, rerouteState])
+
+  const recentAlertRows = useMemo(() => {
+    return alerts.map((alert, index) => toRecentAlert(alert, index, reroutedAlertIds))
+  }, [alerts, reroutedAlertIds])
+
+  const isActiveAlertRerouted = reroutedAlertIds.has(activeAlert.id)
 
   const handleToggle = (type: AlertToggleType) => {
-    setToggleStates((current) => ({
+    updateSettings((current) => ({
       ...current,
-      [type]: !current[type],
+      toggleStates: {
+        ...current.toggleStates,
+        [type]: !current.toggleStates[type],
+      },
     }))
   }
 
   const resetSettings = () => {
-    setToggleStates(createToggleState(alertToggleSettings))
-    setQuietHoursEnabled(alertSettings.quietHoursEnabled)
-    setQuietStart(alertSettings.quietStartTime)
-    setQuietEnd(alertSettings.quietEndTime)
-    setSelectedDay(alertSettings.selectedDays)
-    setRadiusIndex(radiusIndexFromMeters(alertSettings.alertRadiusMeters))
-    setMockNotice('알림 설정이 기본 데모값으로 초기화되었습니다.')
+    setSettingsState(getDefaultAlertSettings())
+    setMockNotice('알림 설정이 기본값으로 초기화되어 저장되었습니다.')
   }
+
+  const handleReroute = () => {
+    if (activeAlert.riskLevel === 'safe') {
+      setMockNotice('현재 경로 주변에는 우회할 위험 구간이 없습니다.')
+      return
+    }
+
+    const extraDistanceMeters = Math.max(220, Math.round(activeAlert.distanceMeters * 0.08))
+    const extraMinutes = Math.max(2, Math.round(extraDistanceMeters / 180))
+
+    setReroutedAlertIds((current) => new Set(current).add(activeAlert.id))
+    setRerouteState({
+      appliedAt: new Date().toISOString(),
+      avoidedAlertId: activeAlert.id,
+      avoidedLocation: activeAlert.location,
+      extraDistanceMeters,
+      extraMinutes,
+    })
+
+    const nextAlert = alerts.find((alert) => alert.id !== activeAlert.id && !reroutedAlertIds.has(alert.id) && alert.riskLevel !== 'safe')
+
+    if (nextAlert) {
+      setActiveAlertId(nextAlert.id)
+    } else {
+      const safeAlert = buildSafeAlert(activeAlert.location)
+      setAlerts((current) => (current.some((alert) => alert.id === safeAlert.id) ? current : [safeAlert, ...current]))
+      setActiveAlertId(safeAlert.id)
+    }
+
+    setMockNotice(`${activeAlert.location} 위험 구간을 피하도록 경로를 갱신했습니다.`)
+  }
+
+  const handleSelectRecentAlert = (alert: RecentDangerAlert) => {
+    const alertId = alert.id.replace(/^recent-/, '')
+    const selectedAlert = alerts.find((item) => item.id === alertId)
+
+    if (!selectedAlert) {
+      setMockNotice(`${alert.title} 알림을 확인했습니다.`)
+      return
+    }
+
+    setActiveAlertId(selectedAlert.id)
+    setMockNotice(`${selectedAlert.location} 알림을 현재 경로에 표시했습니다.`)
+  }
+
+  const noticeMessage = isAlertLoading ? '위험 알림 데이터를 불러오는 중입니다.' : mockNotice || alertDataNotice
 
   return (
     <div className="min-w-0">
-      <div>
-        <h1 className="text-[30px] font-black leading-tight text-[#07182F] sm:text-[33px]">실시간 위험 알림</h1>
-        <p className="mt-1 text-[15px] font-semibold leading-6 text-slate-500">
-          실시간 위험 정보를 빠르게 확인하고 안전한 경로로 이동하세요.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-[30px] font-black leading-tight text-[#07182F] sm:text-[33px]">실시간 위험 알림</h1>
+          <p className="mt-1 text-[15px] font-semibold leading-6 text-slate-500">
+            실시간 위험 정보를 빠르게 확인하고 안전한 경로로 이동하세요.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void loadAlerts()}
+          disabled={isAlertLoading}
+          className="flex h-11 w-fit items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-black text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <RefreshCcw size={17} aria-hidden="true" />
+          {isAlertLoading ? '갱신 중' : '알림 새로고침'}
+        </button>
       </div>
 
-      <MockNotice message={mockNotice} />
+      <MockNotice message={noticeMessage} />
 
       <div className="mt-5">
         <DangerBanner
-          alert={currentDangerAlert}
-          onReroute={() => setMockNotice('경로 재탐색 요청이 접수되었습니다. 현재 화면에서만 상태가 표시됩니다.')}
+          alert={activeAlert}
+          isRerouted={isActiveAlertRerouted}
+          onReroute={handleReroute}
         />
-        <RouteMapPreview onDetailRoute={() => setMockNotice('상세 경로 보기는 데모 화면에서만 열리는 동작입니다.')} />
+        <KakaoAlertRouteMap
+          alert={activeAlert}
+          isRerouted={rerouteState !== null}
+          onDetailRoute={() => {
+            setShowAllAlerts(true)
+            setMockNotice(`현재 경로와 관련된 위험 알림 ${recentAlertRows.length}건을 표시했습니다.`)
+          }}
+          preview={routeSummary}
+        />
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-3 xl:gap-5">
         {alertToggleSettings.map((setting) => (
           <AlertOptionCard
             key={setting.id}
-            enabled={toggleStates[setting.type]}
+            enabled={settingsState.toggleStates[setting.type]}
             setting={setting}
             onToggle={() => handleToggle(setting.type)}
           />
@@ -765,20 +1129,25 @@ export function AlertsPage() {
 
       <div className="mt-5 grid gap-4 2xl:grid-cols-[minmax(0,1fr)_360px] 2xl:gap-5">
         <RecentDangerAlertList
-          onShowAll={() => setMockNotice('전체 알림 보기 요청이 확인되었습니다. 현재는 데모 목록만 표시됩니다.')}
-          onSelectAlert={(alert) => setMockNotice(`${alert.title} 알림을 선택했습니다.`)}
+          alerts={recentAlertRows}
+          isExpanded={showAllAlerts}
+          onShowAll={() => setShowAllAlerts((current) => !current)}
+          onSelectAlert={handleSelectRecentAlert}
         />
         <AlertSettingsPanel
-          quietHoursEnabled={quietHoursEnabled}
-          quietStart={quietStart}
-          quietEnd={quietEnd}
-          selectedDay={selectedDay}
+          quietHoursEnabled={settingsState.quietHoursEnabled}
+          quietStart={settingsState.quietStart}
+          quietEnd={settingsState.quietEnd}
+          selectedDay={settingsState.selectedDay}
           radiusIndex={radiusIndex}
-          setQuietHoursEnabled={setQuietHoursEnabled}
-          setQuietStart={setQuietStart}
-          setQuietEnd={setQuietEnd}
-          setSelectedDay={setSelectedDay}
-          setRadiusIndex={setRadiusIndex}
+          setQuietHoursEnabled={(value) => updateSettings((current) => ({ ...current, quietHoursEnabled: value }))}
+          setQuietStart={(value) => updateSettings((current) => ({ ...current, quietStart: value }))}
+          setQuietEnd={(value) => updateSettings((current) => ({ ...current, quietEnd: value }))}
+          setSelectedDay={(value) => updateSettings((current) => ({ ...current, selectedDay: value }))}
+          setRadiusIndex={(value) => {
+            const radiusMeters = radiusMarks[value]?.value ?? alertSettings.alertRadiusMeters
+            updateSettings((current) => ({ ...current, radiusMeters }))
+          }}
           onReset={resetSettings}
         />
       </div>

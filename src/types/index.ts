@@ -304,7 +304,6 @@ export interface CurrentDangerAlert {
 export interface RoutePreview {
   estimatedArrival: string
   remainingDistance: string
-  routeMapImageUrl: string
 }
 
 export interface AlertToggleSetting {

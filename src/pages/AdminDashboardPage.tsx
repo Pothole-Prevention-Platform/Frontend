@@ -12,7 +12,7 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react'
-import { getRiskDistrictRanking, getRiskZones } from '../api/riskApi'
+import { getDistrictRiskRanking, getRiskZones } from '../api/riskApi'
 import {
   adminFilters,
   adminKpiStats,
@@ -54,6 +54,7 @@ const statusOptions = ['전체', '접수 대기', '접수 완료', '보수 진�
 const departmentOptions = ['선택하세요', '서울시 도로관리과', '강남구 도로보수팀', '강북구 안전건설과', '영등포구 도로관리팀', '관악구 치수도로과']
 const assignmentDistrictOptions = ['자치구를 선택하세요', '강남구', '강북구', '영등포구', '관악구', '노원구', '서초구', '송파구']
 const priorityLevels: AdminRiskGrade[] = ['긴급', '주의', '관심']
+const LOCAL_RISK_FALLBACK_NOTICE = '현재 로컬 위험도 계산 결과가 없어 예시 데이터를 표시하고 있습니다.'
 
 const colorStyles: Record<AdminColorType, { text: string; value: string; softBg: string; iconBg: string; dot: string; ring: string }> = {
   blue: {
@@ -136,7 +137,7 @@ const donutColors: Record<AdminColorType, string> = {
 const riskGradeStyles: Record<AdminRiskGrade, string> = {
   긴급: 'bg-red-50 text-red-700 ring-red-200',
   주의: 'bg-orange-50 text-orange-700 ring-orange-200',
-  관심: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  관심: 'bg-yellow-50 text-yellow-700 ring-yellow-200',
 }
 
 const mapRiskStyles: Record<AdminMapRiskLevel, { marker: string; halo: string; label: string }> = {
@@ -212,18 +213,11 @@ function getStringField(source: Record<string, unknown>, keys: string[]) {
 }
 
 function normalizeRiskScore(source: Record<string, unknown>) {
-  const rawScore = getNumberField(source, ['riskScore', 'maxRiskScore', 'averageRiskScore', 'score', 'value'])
+  const rawScore = getNumberField(source, ['riskScore', 'maxRiskScore', 'avgRiskScore', 'averageRiskScore', 'score', 'value'])
 
   if (rawScore === undefined) {
-    return 0
-  }
-
-  if (rawScore > 0 && rawScore <= 1) {
-    return Math.round(rawScore * 100)
-  }
-
-  if (rawScore > 1 && rawScore <= 10) {
-    return Math.round(rawScore * 10)
+    const probability = getNumberField(source, ['probability'])
+    return probability === undefined ? 0 : clamp(Math.round(probability * 100), 0, 100)
   }
 
   return clamp(Math.round(rawScore), 0, 100)
@@ -262,8 +256,8 @@ function getAdminMapRiskLevel(score: number): AdminMapRiskLevel {
 }
 
 function getMapPosition(result: RiskGridResult, fallback: AdminMapRiskPoint) {
-  const latitude = getNumberField(result, ['centerLat', 'latitude', 'lat'])
-  const longitude = getNumberField(result, ['centerLng', 'longitude', 'lng'])
+  const latitude = getNumberField(result, ['centerLat'])
+  const longitude = getNumberField(result, ['centerLng'])
 
   if (latitude === undefined || longitude === undefined) {
     return { x: fallback.x, y: fallback.y }
@@ -299,7 +293,7 @@ function toPriorityAreasFromRankings(rows: RiskDistrictRanking[]): AdminPriority
     const score = normalizeRiskScore(row)
     const totalGridCount = getNumberField(row, ['totalGridCount', 'gridCount']) ?? 0
     const highRiskGridCount = getNumberField(row, ['highRiskGridCount', 'dangerGridCount']) ?? 0
-    const highRiskRatio = getNumberField(row, ['highRiskRatio']) ?? (totalGridCount > 0 ? (highRiskGridCount / totalGridCount) * 100 : score)
+    const highRiskRatio = getNumberField(row, ['highRiskRatio', 'dangerGridRate']) ?? (totalGridCount > 0 ? (highRiskGridCount / totalGridCount) * 100 : score)
 
     return {
       rank: index + 1,
@@ -1057,7 +1051,7 @@ export function AdminDashboardPage() {
 
       const [zonesResult, rankingResult] = await Promise.allSettled([
         getRiskZones(districtName),
-        getRiskDistrictRanking(),
+        getDistrictRiskRanking(),
       ])
 
       if (ignore) {
@@ -1080,8 +1074,8 @@ export function AdminDashboardPage() {
         setPriorityAreas(adminPriorityAreas)
       }
 
-      if (zonesResult.status === 'rejected' || rankingResult.status === 'rejected') {
-        setRiskApiNotice('위험도 대시보드 API를 불러오지 못해 데모 데이터를 표시합니다. Swagger에 risk/dashboard 엔드포인트가 노출되어 있는지 확인해 주세요.')
+      if (zoneRows.length === 0) {
+        setRiskApiNotice(LOCAL_RISK_FALLBACK_NOTICE)
       }
 
       setIsRiskLoading(false)

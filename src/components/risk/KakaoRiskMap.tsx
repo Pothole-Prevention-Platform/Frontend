@@ -1,0 +1,329 @@
+import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
+import { X } from 'lucide-react'
+import type { RiskGridResult } from '../../types/risk'
+import { cn } from '../../utils/cn'
+
+type KakaoRiskMapProps = {
+  activeGridCode?: string
+  gridResults: RiskGridResult[]
+  isGridDetailLoading: boolean
+  onClearSelectedGrid: () => void
+  onSelectGrid: (result: RiskGridResult) => void
+  selectedGrid: RiskGridResult | null
+}
+
+type RiskMarkerTone = 'red' | 'orange' | 'yellow' | 'green' | 'gray'
+
+type RiskMarker = {
+  gridCode?: string
+  id: string
+  label: string
+  result: RiskGridResult
+  riskLevelLabel: string
+  riskScore?: number
+  tone: RiskMarkerTone
+  position: {
+    lat: number
+    lng: number
+  }
+}
+
+const SEOUL_CENTER = {
+  lat: 37.5665,
+  lng: 126.978,
+}
+
+const riskToneClasses: Record<RiskMarkerTone, string> = {
+  red: 'bg-red-600 text-white shadow-red-500/35',
+  orange: 'bg-orange-500 text-white shadow-orange-500/35',
+  yellow: 'bg-yellow-400 text-slate-950 shadow-yellow-400/35',
+  green: 'bg-green-500 text-white shadow-green-500/35',
+  gray: 'bg-slate-500 text-white shadow-slate-500/30',
+}
+
+const riskLabelByTone: Record<RiskMarkerTone, string> = {
+  red: '위험',
+  orange: '주의',
+  yellow: '관심',
+  green: '안전',
+  gray: '미확인',
+}
+
+function getNumberField(result: RiskGridResult, keys: string[]) {
+  for (const key of keys) {
+    const value = result[key]
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+function getStringField(result: RiskGridResult, keys: string[]) {
+  for (const key of keys) {
+    const value = result[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return undefined
+}
+
+function getRiskTone(result: RiskGridResult): RiskMarkerTone {
+  const rawLevel = getStringField(result, ['riskLevel', 'riskGrade', 'grade', 'level'])
+
+  if (rawLevel === '위험') {
+    return 'red'
+  }
+
+  if (rawLevel === '주의') {
+    return 'orange'
+  }
+
+  if (rawLevel === '관심') {
+    return 'yellow'
+  }
+
+  if (rawLevel === '안전') {
+    return 'green'
+  }
+
+  return 'gray'
+}
+
+function getDisplayRiskLevel(result: RiskGridResult) {
+  const tone = getRiskTone(result)
+  return tone === 'gray' ? getStringField(result, ['riskLevel', 'riskGrade', 'grade', 'level']) ?? riskLabelByTone.gray : riskLabelByTone[tone]
+}
+
+function buildMarkers(results: RiskGridResult[]) {
+  return results
+    .map((result, index): RiskMarker | undefined => {
+      const centerLat = getNumberField(result, ['centerLat'])
+      const centerLng = getNumberField(result, ['centerLng'])
+
+      if (centerLat === undefined || centerLng === undefined) {
+        return undefined
+      }
+
+      const gridCode = getStringField(result, ['gridCode', 'gridId'])
+      const districtName = getStringField(result, ['districtName', 'district', 'guName'])
+      const tone = getRiskTone(result)
+
+      return {
+        gridCode,
+        id: gridCode ?? `risk-marker-${index}`,
+        label: districtName ?? gridCode ?? `위험 격자 ${index + 1}`,
+        position: {
+          lat: centerLat,
+          lng: centerLng,
+        },
+        result,
+        riskLevelLabel: getDisplayRiskLevel(result),
+        riskScore: getNumberField(result, ['riskScore']),
+        tone,
+      }
+    })
+    .filter((marker): marker is RiskMarker => marker !== undefined)
+}
+
+function formatValue(value: number | string | undefined) {
+  if (value === undefined || value === '') {
+    return '-'
+  }
+
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2)
+  }
+
+  return value
+}
+
+function formatCalculatedAt(value: string | undefined) {
+  if (!value) {
+    return '-'
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function RiskDetailPanel({
+  isLoading,
+  onClose,
+  result,
+}: {
+  isLoading: boolean
+  onClose: () => void
+  result: RiskGridResult
+}) {
+  const fields = [
+    { label: '격자 코드', value: getStringField(result, ['gridCode', 'gridId']) },
+    { label: '자치구', value: getStringField(result, ['districtName', 'district', 'guName']) },
+    { label: '위험 등급', value: getDisplayRiskLevel(result) },
+    { label: '위험도', value: getNumberField(result, ['riskScore']) },
+    { label: '강수 점수', value: getNumberField(result, ['rainfallScore']) },
+    { label: '교통 점수', value: getNumberField(result, ['trafficScore']) },
+    { label: '하수 점수', value: getNumberField(result, ['sewerScore']) },
+    { label: '굴착 점수', value: getNumberField(result, ['excavationScore']) },
+    { label: '산출 시각', value: formatCalculatedAt(result.calculatedAt ?? result.updatedAt) },
+  ]
+
+  return (
+    <div className="absolute right-4 top-4 z-30 w-[min(330px,calc(100%-2rem))] rounded-xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur sm:right-6 sm:top-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[12px] font-black text-blue-700">선택 격자</p>
+          <h2 className="mt-1 truncate text-[16px] font-black text-slate-900">
+            {[getStringField(result, ['districtName', 'district', 'guName']), getStringField(result, ['gridCode', 'gridId'])].filter(Boolean).join(' ') || '위험 격자'}
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="선택 격자 닫기"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-2">
+        {fields.map((field) => (
+          <div key={field.label} className={cn('rounded-lg bg-slate-50 px-3 py-2', field.label === '산출 시각' && 'col-span-2')}>
+            <dt className="text-[11px] font-black text-slate-400">{field.label}</dt>
+            <dd className="mt-1 text-[13px] font-black text-slate-800">{formatValue(field.value)}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {isLoading && (
+        <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-[12px] font-bold text-blue-700">
+          상세 정보를 불러오는 중입니다.
+        </p>
+      )}
+    </div>
+  )
+}
+
+export function KakaoRiskMap({
+  activeGridCode,
+  gridResults,
+  isGridDetailLoading,
+  onClearSelectedGrid,
+  onSelectGrid,
+  selectedGrid,
+}: KakaoRiskMapProps) {
+  const kakaoJavaScriptKey = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY?.trim() ?? ''
+  const [isLoading, error] = useKakaoLoader({
+    appkey: kakaoJavaScriptKey,
+  })
+  const markers = buildMarkers(gridResults)
+
+  if (!kakaoJavaScriptKey) {
+    return (
+      <section className="flex h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-6 text-center shadow-[0_18px_45px_rgba(15,40,70,0.08)] sm:h-[500px] xl:h-[560px]">
+        <p className="text-[14px] font-bold leading-6 text-slate-600">카카오 지도 키가 설정되지 않아 지도를 표시할 수 없습니다.</p>
+      </section>
+    )
+  }
+
+  if (error) {
+    return (
+      <section className="flex h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-6 text-center shadow-[0_18px_45px_rgba(15,40,70,0.08)] sm:h-[500px] xl:h-[560px]">
+        <p className="text-[14px] font-bold leading-6 text-slate-600">카카오 지도를 불러오지 못했습니다. 도메인 등록과 JavaScript 키를 확인해 주세요.</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="relative h-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_18px_45px_rgba(15,40,70,0.08)] sm:h-[500px] xl:h-[560px]">
+      <Map
+        center={SEOUL_CENTER}
+        className="h-full w-full"
+        isPanto
+        level={7}
+        style={{ height: '100%', width: '100%' }}
+      >
+        {markers.map((marker) => {
+          const isSelected = marker.gridCode !== undefined && marker.gridCode === activeGridCode
+
+          return (
+            <CustomOverlayMap
+              key={marker.id}
+              clickable
+              position={marker.position}
+              yAnchor={1}
+              zIndex={isSelected ? 20 : 10}
+            >
+              <button
+                type="button"
+                onClick={() => onSelectGrid(marker.result)}
+                className="flex -translate-y-1 flex-col items-center outline-none transition hover:scale-110 focus-visible:scale-110 focus-visible:ring-4 focus-visible:ring-blue-200"
+                aria-label={`${marker.label} ${marker.riskLevelLabel} 상세 보기`}
+              >
+                <span
+                  className={cn(
+                    'flex h-9 min-w-9 items-center justify-center rounded-full border-[3px] border-white px-2 text-[11px] font-black shadow-xl',
+                    riskToneClasses[marker.tone],
+                    isSelected && 'ring-4 ring-blue-200',
+                  )}
+                >
+                  {marker.riskScore === undefined ? marker.riskLevelLabel : Math.round(marker.riskScore)}
+                </span>
+                <span className="mt-1 max-w-[92px] truncate rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-black text-slate-700 shadow-sm">
+                  {marker.label}
+                </span>
+              </button>
+            </CustomOverlayMap>
+          )
+        })}
+      </Map>
+
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-slate-900/5" />
+
+      {isLoading && (
+        <div className="absolute left-4 top-4 z-20 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[12px] font-bold text-blue-700 shadow-sm">
+          카카오 지도를 불러오는 중입니다.
+        </div>
+      )}
+
+      <div className="absolute bottom-5 right-4 z-20 grid min-w-[250px] grid-cols-5 gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:right-6">
+        {([
+          ['green', '안전'],
+          ['yellow', '관심'],
+          ['orange', '주의'],
+          ['red', '위험'],
+          ['gray', '미확인'],
+        ] as const).map(([tone, label]) => (
+          <div key={tone} className="text-center">
+            <span className={cn('mx-auto block h-3 w-3 rounded-full', riskToneClasses[tone].split(' ')[0])} />
+            <span className="mt-1 block text-[10px] font-black text-slate-700">{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {selectedGrid && (
+        <RiskDetailPanel
+          isLoading={isGridDetailLoading}
+          onClose={onClearSelectedGrid}
+          result={selectedGrid}
+        />
+      )}
+    </section>
+  )
+}

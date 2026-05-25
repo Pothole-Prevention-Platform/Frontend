@@ -37,6 +37,10 @@ export async function getGridRiskResult(gridCode: string) {
   return isRecord(response) ? (response as RiskGridResult) : {}
 }
 
+function getRiskScore(result: RiskGridResult) {
+  return typeof result.riskScore === 'number' && Number.isFinite(result.riskScore) ? result.riskScore : 0
+}
+
 export async function getRiskZones(districtName?: string) {
   const searchParams = new URLSearchParams()
 
@@ -46,10 +50,12 @@ export async function getRiskZones(districtName?: string) {
 
   const queryString = searchParams.toString()
   const response = await apiJson<unknown>(`/api/v1/dashboard/risk/zones${queryString ? `?${queryString}` : ''}`)
-  return getRecordArray<RiskGridResult>(response)
+  return getRecordArray<RiskGridResult>(response).sort((a, b) => getRiskScore(b) - getRiskScore(a))
 }
 
-export async function getRiskDistrictRanking() {
-  const response = await apiJson<unknown>('/api/v1/dashboard/risk-district-ranking')
+export async function getDistrictRiskRanking() {
+  const response = await apiJson<unknown>('/api/v1/dashboard/risk/district-ranking')
   return getRecordArray<RiskDistrictRanking>(response)
 }
+
+export const getRiskDistrictRanking = getDistrictRiskRanking

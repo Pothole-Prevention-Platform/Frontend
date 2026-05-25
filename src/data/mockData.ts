@@ -1045,7 +1045,6 @@ export const currentDangerAlert: CurrentDangerAlert = {
 export const routePreview: RoutePreview = {
   estimatedArrival: '14:24',
   remainingDistance: '4.2 km',
-  routeMapImageUrl: '/assets/alerts/alert-route-map.webp',
 }
 
 export const alertToggleSettings: AlertToggleSetting[] = [

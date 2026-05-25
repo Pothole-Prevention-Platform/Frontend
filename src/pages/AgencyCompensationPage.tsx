@@ -253,11 +253,12 @@ function getReportCoordinates(report: CitizenReportResponse | null) {
 }
 
 function getAgencyDisplay(agencyInfo: AgencyInfo | null, claim: ClaimResponse | null, report: CitizenReportResponse | null) {
+  const primaryDepartment = agencyInfo?.departments?.[0]
   const roadAddress = firstText(report?.address, agencyInfo?.roadName, agencyInfo?.address, agencyLookupResult.roadAddress) ?? agencyLookupResult.roadAddress
   const detailAddress = firstText(report?.locationDetail, agencyInfo?.address, agencyLookupResult.lotAddress) ?? agencyLookupResult.lotAddress
   const districtName = firstText(agencyInfo?.districtName, agencyLookupResult.districtOffice)
   const managingAuthority =
-    firstText(claim?.managingAuthority, agencyInfo?.managingAuthority, agencyInfo?.departmentName, agencyLookupResult.roadManagementAgency) ??
+    firstText(claim?.managingAuthority, agencyInfo?.agencyName, agencyInfo?.managingAuthority, primaryDepartment?.departmentName, agencyInfo?.departmentName, agencyLookupResult.roadManagementAgency) ??
     agencyLookupResult.roadManagementAgency
 
   return {
@@ -275,6 +276,21 @@ function getDisplayAgencyContacts(agencyInfo: AgencyInfo | null): AgencyContact[
   }
 
   const fallbackContact = agencyContacts[0]
+  const departments = agencyInfo.departments?.filter((department) => firstText(department.departmentName, department.mainTask, department.phoneNumber)) ?? []
+
+  if (departments.length > 0) {
+    return departments.map((department, index) => ({
+      ...fallbackContact,
+      id: `agency-api-department-${index}`,
+      category: firstText(department.category, fallbackContact.category) ?? fallbackContact.category,
+      departmentName: firstText(department.departmentName, fallbackContact.departmentName) ?? fallbackContact.departmentName,
+      responsibility: firstText(department.mainTask, fallbackContact.responsibility) ?? fallbackContact.responsibility,
+      agencyName: firstText(agencyInfo.agencyName, fallbackContact.agencyName) ?? fallbackContact.agencyName,
+      department: firstText(department.departmentName, fallbackContact.department) ?? fallbackContact.department,
+      phone: firstText(department.phoneNumber, fallbackContact.phone) ?? fallbackContact.phone,
+      address: firstText(agencyInfo.address, fallbackContact.address) ?? fallbackContact.address,
+    }))
+  }
 
   return [
     {
@@ -282,10 +298,10 @@ function getDisplayAgencyContacts(agencyInfo: AgencyInfo | null): AgencyContact[
       id: 'agency-api-main',
       category: '조회 결과',
       departmentName: firstText(agencyInfo.departmentName, fallbackContact.departmentName) ?? fallbackContact.departmentName,
-      responsibility: firstText(agencyInfo.managingAuthority, agencyInfo.roadName, fallbackContact.responsibility) ?? fallbackContact.responsibility,
-      agencyName: firstText(agencyInfo.managingAuthority, fallbackContact.agencyName) ?? fallbackContact.agencyName,
+      responsibility: firstText(agencyInfo.mainTask, agencyInfo.managingAuthority, agencyInfo.roadName, fallbackContact.responsibility) ?? fallbackContact.responsibility,
+      agencyName: firstText(agencyInfo.agencyName, agencyInfo.managingAuthority, fallbackContact.agencyName) ?? fallbackContact.agencyName,
       department: firstText(agencyInfo.departmentName, fallbackContact.department) ?? fallbackContact.department,
-      phone: firstText(agencyInfo.phone, agencyInfo.contact, fallbackContact.phone) ?? fallbackContact.phone,
+      phone: firstText(agencyInfo.phoneNumber, agencyInfo.phone, agencyInfo.contact, fallbackContact.phone) ?? fallbackContact.phone,
       address: firstText(agencyInfo.address, fallbackContact.address) ?? fallbackContact.address,
     },
   ]
@@ -352,7 +368,7 @@ export function AgencyCompensationPage() {
       const coordinates = getReportCoordinates(report)
 
       try {
-        const agency = await getAgencyByLocation(coordinates)
+        const agency = await getAgencyByLocation(coordinates.lat, coordinates.lng)
 
         if (!ignore) {
           setAgencyInfo(agency)

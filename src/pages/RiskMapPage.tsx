@@ -8,19 +8,16 @@ import {
   Construction,
   Cpu,
   Droplets,
-  Gauge,
-  Layers,
   RefreshCcw,
-  ShieldCheck,
   Siren,
   UserRound,
 } from 'lucide-react'
-import { getLatestGridRiskResults, getRiskZones } from '../api/riskApi'
+import { getGridRiskResult, getLatestGridRiskResults, getRiskZones } from '../api/riskApi'
+import { KakaoRiskMap } from '../components/risk/KakaoRiskMap'
 import { riskHighZones, riskLegend, riskMapFilters, riskMapStats } from '../data/mockData'
 import type { RiskGridResult, RiskMapFilterId, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem, RiskMapStats } from '../types'
 import { cn } from '../utils/cn'
 
-type MapImageState = 'webp' | 'png' | 'fallback'
 type StatColor = 'red' | 'blue' | 'teal'
 
 const defaultFilterValues: Record<RiskMapFilterId, string> = {
@@ -30,10 +27,7 @@ const defaultFilterValues: Record<RiskMapFilterId, string> = {
   undergroundConstruction: '전체',
 }
 
-const mapImagePaths: Record<Exclude<MapImageState, 'fallback'>, string> = {
-  webp: '/assets/risk-map/seoul-risk-heatmap.webp',
-  png: '/assets/risk-map/seoul-risk-heatmap.png',
-}
+const LOCAL_RISK_FALLBACK_NOTICE = '현재 로컬 위험도 계산 결과가 없어 예시 데이터를 표시하고 있습니다.'
 
 const filterIcons: Record<RiskMapFilterId, ReactNode> = {
   rainfall: <CloudRain size={22} aria-hidden="true" />,
@@ -69,28 +63,72 @@ const legendDotClasses: Record<RiskMapLegendItem['color'], string> = {
   red: 'bg-red-600',
 }
 
-const fallbackDistricts = [
-  ['은평구', '29%', '24%'],
-  ['도봉구', '61%', '13%'],
-  ['강북구', '49%', '23%'],
-  ['성북구', '56%', '33%'],
-  ['중랑구', '70%', '31%'],
-  ['종로구', '45%', '39%'],
-  ['서대문구', '33%', '44%'],
-  ['중구', '54%', '47%'],
-  ['동대문구', '64%', '41%'],
-  ['마포구', '25%', '52%'],
-  ['강서구', '13%', '57%'],
-  ['양천구', '18%', '73%'],
-  ['금천구', '26%', '86%'],
-  ['동작구', '43%', '76%'],
-  ['관악구', '50%', '87%'],
-  ['서초구', '65%', '82%'],
-  ['강남구', '78%', '75%'],
-  ['송파구', '89%', '68%'],
-  ['강동구', '93%', '49%'],
-  ['광진구', '76%', '44%'],
-] as const
+const fallbackRiskGridResults: RiskGridResult[] = [
+  {
+    id: 9001,
+    gridCode: 'MOCK-GN-001',
+    districtName: '강남구',
+    centerLat: 37.501274,
+    centerLng: 127.039585,
+    riskScore: 83,
+    riskLevel: '위험',
+    rainfallScore: 78,
+    trafficScore: 82,
+    sewerScore: 64,
+    excavationScore: 48,
+    temperatureScore: 10,
+    calculatedAt: '2026-05-21T21:40:42',
+  },
+  {
+    id: 9002,
+    gridCode: 'MOCK-JR-002',
+    districtName: '종로구',
+    centerLat: 37.582604,
+    centerLng: 126.997901,
+    riskScore: 62,
+    riskLevel: '주의',
+    rainfallScore: 58,
+    trafficScore: 43,
+    sewerScore: 71,
+    excavationScore: 20,
+    temperatureScore: 8,
+    calculatedAt: '2026-05-21T21:40:42',
+  },
+  {
+    id: 9003,
+    gridCode: 'MOCK-MP-003',
+    districtName: '마포구',
+    centerLat: 37.55684,
+    centerLng: 126.92362,
+    riskScore: 36,
+    riskLevel: '관심',
+    rainfallScore: 31,
+    trafficScore: 28,
+    sewerScore: 44,
+    excavationScore: 19,
+    temperatureScore: 7,
+    calculatedAt: '2026-05-21T21:40:42',
+  },
+  {
+    id: 9004,
+    gridCode: 'MOCK-SC-004',
+    districtName: '서초구',
+    centerLat: 37.5048,
+    centerLng: 127.0049,
+    riskScore: 12,
+    riskLevel: '안전',
+    rainfallScore: 8,
+    trafficScore: 12,
+    sewerScore: 15,
+    excavationScore: 5,
+    temperatureScore: 6,
+    calculatedAt: '2026-05-21T21:40:42',
+  },
+]
+
+function isFallbackRiskGrid(result: RiskGridResult) {
+  return getStringField(result, ['gridCode', 'gridId'])?.startsWith('MOCK-') ?? false
+}
 
 function clampPercent(value: number) {
   return Math.min(100, Math.max(0, Math.round(value)))
@@ -121,42 +159,39 @@ function getStringField(result: RiskGridResult, keys: string[]) {
 }
 
 function normalizeRiskScore(result: RiskGridResult) {
-  const rawScore = getNumberField(result, ['riskScore', 'score', 'riskPercent', 'probability', 'value'])
+  const rawScore = getNumberField(result, ['riskScore', 'score', 'riskPercent', 'value'])
 
   if (rawScore === undefined) {
-    return 0
-  }
-
-  if (rawScore > 0 && rawScore <= 1) {
-    return clampPercent(rawScore * 100)
-  }
-
-  if (rawScore > 1 && rawScore <= 10) {
-    return clampPercent(rawScore * 10)
+    const probability = getNumberField(result, ['probability'])
+    return probability === undefined ? 0 : clampPercent(probability * 100)
   }
 
   return clampPercent(rawScore)
 }
 
 function getRiskGrade(result: RiskGridResult, riskPercent: number): RiskMapHighZoneGrade {
-  const rawGrade = getStringField(result, ['riskGrade', 'riskLevel', 'grade', 'level'])?.toUpperCase()
+  const rawGrade = getStringField(result, ['riskGrade', 'riskLevel', 'grade', 'level'])
 
   if (rawGrade) {
     const gradeMap: Record<string, RiskMapHighZoneGrade> = {
+      위험: '위험',
+      주의: '주의',
+      관심: '관심',
+      안전: '안전',
       CRITICAL: '매우 높음',
       VERY_HIGH: '매우 높음',
       DANGER: '위험',
       HIGH: '높음',
       LARGE: '높음',
-      MEDIUM: '보통',
-      CAUTION: '보통',
-      WARNING: '보통',
-      LOW: '낮음',
-      ATTENTION: '낮음',
+      MEDIUM: '주의',
+      CAUTION: '주의',
+      WARNING: '주의',
+      LOW: '안전',
+      ATTENTION: '관심',
       SAFE: '안전',
       NONE: '안전',
     }
-    return gradeMap[rawGrade] ?? (riskPercent >= 70 ? '위험' : riskPercent >= 40 ? '보통' : riskPercent >= 20 ? '낮음' : '안전')
+    return gradeMap[rawGrade] ?? gradeMap[rawGrade.toUpperCase()] ?? (riskPercent >= 70 ? '위험' : riskPercent >= 40 ? '주의' : riskPercent >= 20 ? '관심' : '안전')
   }
 
   if (riskPercent >= 70) {
@@ -164,11 +199,11 @@ function getRiskGrade(result: RiskGridResult, riskPercent: number): RiskMapHighZ
   }
 
   if (riskPercent >= 40) {
-    return '보통'
+    return '주의'
   }
 
   if (riskPercent >= 20) {
-    return '낮음'
+    return '관심'
   }
 
   return '안전'
@@ -293,152 +328,6 @@ function FilterBar() {
         <span className="whitespace-nowrap">필터 초기화</span>
       </button>
     </div>
-  )
-}
-
-function FallbackSeoulMap() {
-  return (
-    <div
-      role="img"
-      aria-label="서울특별시 포트홀 위험 예측 히트맵 대체 지도"
-      className="absolute inset-0 overflow-hidden bg-slate-100"
-    >
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(148,163,184,0.15)_1px,transparent_1px),linear-gradient(rgba(148,163,184,0.15)_1px,transparent_1px)] bg-[size:38px_38px]" />
-      <div className="absolute left-[-12%] top-[25%] h-8 w-[122%] rotate-[18deg] rounded-full bg-sky-200/90 shadow-[0_0_0_8px_rgba(255,255,255,0.48)]" />
-      <div className="absolute left-[-10%] top-[58%] h-10 w-[118%] rotate-[-12deg] rounded-full bg-sky-200/90 shadow-[0_0_0_8px_rgba(255,255,255,0.48)]" />
-      <div className="absolute left-[10%] top-[8%] h-[82%] w-[82%] rounded-[38%_44%_46%_36%] border-2 border-white/80 bg-green-300/60 shadow-[inset_0_0_0_2px_rgba(255,255,255,0.65),0_20px_45px_rgba(22,101,52,0.12)]" />
-      <div className="absolute left-[17%] top-[15%] h-[34%] w-[38%] rounded-full bg-green-300/80 blur-[18px]" />
-      <div className="absolute left-[33%] top-[19%] h-[36%] w-[34%] rounded-full bg-yellow-300/80 blur-[20px]" />
-      <div className="absolute left-[47%] top-[28%] h-[33%] w-[28%] rounded-full bg-red-400/85 blur-[22px]" />
-      <div className="absolute left-[66%] top-[22%] h-[28%] w-[23%] rounded-full bg-orange-400/80 blur-[18px]" />
-      <div className="absolute left-[72%] top-[53%] h-[28%] w-[26%] rounded-full bg-orange-400/80 blur-[18px]" />
-      <div className="absolute left-[54%] top-[64%] h-[26%] w-[28%] rounded-full bg-yellow-300/75 blur-[18px]" />
-      <svg className="absolute inset-0 h-full w-full opacity-60" viewBox="0 0 900 590" aria-hidden="true">
-        <path d="M220 60L330 180L210 300L320 490" fill="none" stroke="white" strokeWidth="2" />
-        <path d="M410 40L455 190L390 330L470 560" fill="none" stroke="white" strokeWidth="2" />
-        <path d="M590 55L520 210L615 355L560 520" fill="none" stroke="white" strokeWidth="2" />
-        <path d="M120 220L310 250L460 210L690 240L810 310" fill="none" stroke="white" strokeWidth="2" />
-        <path d="M90 380L260 355L430 390L620 360L820 430" fill="none" stroke="white" strokeWidth="2" />
-      </svg>
-      {fallbackDistricts.map(([name, x, y]) => (
-        <span
-          key={name}
-          className="absolute z-10 rounded-md bg-white/45 px-1.5 py-0.5 text-[12px] font-black tracking-[-0.05em] text-slate-800 sm:text-[14px]"
-          style={{ left: x, top: y }}
-        >
-          {name}
-        </span>
-      ))}
-      <FallbackMarker x="52%" y="44%" tone="red" label="중구" />
-      <FallbackMarker x="82%" y="57%" tone="red" label="강동구" />
-      <FallbackMarker x="67%" y="74%" tone="red" label="강남구" />
-      <FallbackMarker x="26%" y="64%" tone="orange" label="영등포구" />
-      <FallbackMarker x="52%" y="84%" tone="green" label="서초구" />
-    </div>
-  )
-}
-
-function FallbackMarker({ x, y, tone, label }: { x: string; y: string; tone: 'red' | 'orange' | 'green'; label: string }) {
-  const colorClass = {
-    red: 'bg-red-600 shadow-red-500/35',
-    orange: 'bg-orange-500 shadow-orange-500/35',
-    green: 'bg-green-500 shadow-green-500/35',
-  }[tone]
-
-  return (
-    <div className="absolute z-20 flex flex-col items-center" style={{ left: x, top: y }}>
-      <span
-        className={cn(
-          'flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[4px] border-white text-white shadow-xl',
-          colorClass,
-        )}
-      >
-        {tone === 'green' ? <ShieldCheck size={20} fill="currentColor" aria-hidden="true" /> : <Siren size={19} fill="currentColor" aria-hidden="true" />}
-      </span>
-      <span className="-mt-2 -translate-x-1/2 rounded-full bg-white/90 px-2 py-0.5 text-[11px] font-black text-slate-700 shadow-sm">
-        {label}
-      </span>
-    </div>
-  )
-}
-
-function MiniLegend() {
-  return (
-    <div className="grid min-w-[250px] grid-cols-4 gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
-      {riskLegend.map((item) => (
-        <div key={item.id} className="text-center">
-          <span className={cn('mx-auto block h-3 w-3 rounded-full', legendDotClasses[item.color])} />
-          <span className="mt-1 block text-[11px] font-black text-slate-700">{item.label}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function RiskMapImagePanel() {
-  const [imageState, setImageState] = useState<MapImageState>('webp')
-  const [isLegendOpen, setIsLegendOpen] = useState(false)
-  const imageSrc = imageState === 'fallback' ? undefined : mapImagePaths[imageState]
-
-  const handleImageError = () => {
-    setImageState((current) => (current === 'webp' ? 'png' : 'fallback'))
-  }
-
-  return (
-    <section className="relative h-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_18px_45px_rgba(15,40,70,0.08)] sm:h-[500px] xl:h-[560px]">
-      {imageSrc ? (
-        <img
-          src={imageSrc}
-          alt="서울특별시 포트홀 위험 예측 히트맵"
-          className="h-full w-full object-cover object-center"
-          onError={handleImageError}
-        />
-      ) : (
-        <FallbackSeoulMap />
-      )}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-slate-900/5" />
-
-      <div className="absolute bottom-[88px] left-4 z-20 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg sm:left-5">
-        <button
-          type="button"
-          aria-label="지도 확대"
-          className="flex h-11 w-11 items-center justify-center border-b border-slate-200 text-2xl font-light text-slate-700 transition hover:bg-blue-50"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          aria-label="지도 축소"
-          className="flex h-11 w-11 items-center justify-center text-2xl font-light text-slate-700 transition hover:bg-blue-50"
-        >
-          −
-        </button>
-      </div>
-
-      <button
-        type="button"
-        aria-label="현재 위치 보기"
-        className="absolute bottom-7 left-4 z-20 flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-lg transition hover:bg-blue-50 sm:left-5"
-      >
-        <Gauge size={21} aria-hidden="true" />
-      </button>
-
-      {isLegendOpen && (
-        <div className="absolute bottom-[86px] right-4 z-20 sm:right-6">
-          <MiniLegend />
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setIsLegendOpen((current) => !current)}
-        aria-expanded={isLegendOpen}
-        className="absolute bottom-7 right-4 z-20 flex h-12 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-black tracking-[-0.04em] text-slate-700 shadow-lg transition hover:bg-blue-50 sm:right-6 sm:px-5 sm:text-[14px]"
-      >
-        <Layers size={20} aria-hidden="true" />
-        범례 보기
-      </button>
-    </section>
   )
 }
 
@@ -724,6 +613,10 @@ function RiskHighZoneTable({ zones }: { zones: RiskMapHighZone[] }) {
 export function RiskMapPage() {
   const [zones, setZones] = useState<RiskMapHighZone[]>(riskHighZones)
   const [stats, setStats] = useState<RiskMapStats>(riskMapStats)
+  const [gridResults, setGridResults] = useState<RiskGridResult[]>([])
+  const [selectedGrid, setSelectedGrid] = useState<RiskGridResult | null>(null)
+  const [selectedGridCode, setSelectedGridCode] = useState<string | undefined>()
+  const [isGridDetailLoading, setIsGridDetailLoading] = useState(false)
   const [isRiskLoading, setIsRiskLoading] = useState(true)
   const [riskNotice, setRiskNotice] = useState('')
 
@@ -745,19 +638,24 @@ export function RiskMapPage() {
 
       const latestRows = latestResult.status === 'fulfilled' ? latestResult.value : []
       const zoneRows = zonesResult.status === 'fulfilled' ? zonesResult.value : []
-      const sourceRows = zoneRows.length > 0 ? zoneRows : latestRows
-      const apiZones = sourceRows.slice(0, 8).map(toRiskMapHighZone)
+      const apiZones = zoneRows.slice(0, 8).map(toRiskMapHighZone)
+      const markerRows = latestRows.length > 0 ? latestRows : zoneRows
+      const displayMarkerRows = markerRows.length > 0 ? markerRows : fallbackRiskGridResults
+
+      setGridResults(displayMarkerRows)
 
       if (apiZones.length > 0) {
         setZones(apiZones)
-        setStats(buildRiskMapStats(apiZones, latestRows))
+        setStats(buildRiskMapStats(apiZones, displayMarkerRows))
       } else {
         setZones(riskHighZones)
         setStats(riskMapStats)
+        setSelectedGrid(null)
+        setSelectedGridCode(undefined)
       }
 
-      if (latestResult.status === 'rejected' || zonesResult.status === 'rejected') {
-        setRiskNotice('위험도 API를 불러오지 못해 데모 데이터를 함께 표시합니다. 백엔드 Swagger에서 risk/dashboard 컨트롤러 노출 여부를 확인해 주세요.')
+      if (apiZones.length === 0) {
+        setRiskNotice(LOCAL_RISK_FALLBACK_NOTICE)
       }
 
       setIsRiskLoading(false)
@@ -769,6 +667,37 @@ export function RiskMapPage() {
       ignore = true
     }
   }, [])
+
+  const handleSelectGrid = async (result: RiskGridResult) => {
+    const gridCode = getStringField(result, ['gridCode', 'gridId'])
+
+    setSelectedGrid(result)
+    setSelectedGridCode(gridCode)
+    setIsGridDetailLoading(false)
+
+    if (!gridCode) {
+      return
+    }
+
+    if (isFallbackRiskGrid(result)) {
+      return
+    }
+
+    setIsGridDetailLoading(true)
+
+    try {
+      const detail = await getGridRiskResult(gridCode)
+
+      setSelectedGrid((current) => {
+        const currentGridCode = current ? getStringField(current, ['gridCode', 'gridId']) : undefined
+        return currentGridCode === gridCode ? { ...current, ...detail } : current
+      })
+    } catch {
+      setSelectedGrid(result)
+    } finally {
+      setIsGridDetailLoading(false)
+    }
+  }
 
   return (
     <div className="min-w-0">
@@ -788,7 +717,17 @@ export function RiskMapPage() {
       )}
 
       <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_316px]">
-        <RiskMapImagePanel />
+        <KakaoRiskMap
+          activeGridCode={selectedGridCode}
+          gridResults={gridResults}
+          isGridDetailLoading={isGridDetailLoading}
+          onClearSelectedGrid={() => {
+            setSelectedGrid(null)
+            setSelectedGridCode(undefined)
+          }}
+          onSelectGrid={handleSelectGrid}
+          selectedGrid={selectedGrid}
+        />
         <RiskSummaryPanel stats={stats} />
       </div>
 
