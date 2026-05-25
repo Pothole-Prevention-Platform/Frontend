@@ -397,6 +397,8 @@ export interface AdminRiskDistributionItem {
 export interface AdminMapRiskPoint {
   id: string
   district: string
+  lat?: number
+  lng?: number
   value: number
   level: AdminMapRiskLevel
   x: number

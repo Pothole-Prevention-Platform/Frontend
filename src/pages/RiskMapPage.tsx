@@ -12,6 +12,7 @@ import {
   Siren,
   UserRound,
 } from 'lucide-react'
+import { getCitizenReports } from '../api/reportApi'
 import { getGridRiskResult, getLatestGridRiskResults, getRiskZones } from '../api/riskApi'
 import { KakaoRiskMap } from '../components/risk/KakaoRiskMap'
 import { riskHighZones, riskLegend, riskMapFilters, riskMapStats } from '../data/mockData'
@@ -169,6 +170,10 @@ function normalizeRiskScore(result: RiskGridResult) {
   return clampPercent(rawScore)
 }
 
+function hasMapCoordinates(result: RiskGridResult) {
+  return getNumberField(result, ['centerLat', 'latitude', 'lat']) !== undefined && getNumberField(result, ['centerLng', 'longitude', 'lng']) !== undefined
+}
+
 function getRiskGrade(result: RiskGridResult, riskPercent: number): RiskMapHighZoneGrade {
   const rawGrade = getStringField(result, ['riskGrade', 'riskLevel', 'grade', 'level'])
 
@@ -207,6 +212,29 @@ function getRiskGrade(result: RiskGridResult, riskPercent: number): RiskMapHighZ
   }
 
   return '안전'
+}
+
+function getRiskSortValue(result: RiskGridResult) {
+  const riskPercent = normalizeRiskScore(result)
+  const riskGrade = getRiskGrade(result, riskPercent)
+  const gradeWeight: Record<RiskMapHighZoneGrade, number> = {
+    긴급: 5,
+    '매우 높음': 5,
+    위험: 4,
+    높음: 4,
+    주의: 3,
+    보통: 3,
+    관심: 2,
+    낮음: 1,
+    안전: 0,
+    '안전/관찰': 0,
+  }
+
+  return gradeWeight[riskGrade] * 1000 + riskPercent
+}
+
+function sortRiskRowsByPriority(results: RiskGridResult[]) {
+  return [...results].sort((a, b) => getRiskSortValue(b) - getRiskSortValue(a))
 }
 
 function getRiskReasons(result: RiskGridResult) {
@@ -278,14 +306,17 @@ function toRiskMapHighZone(result: RiskGridResult, index: number): RiskMapHighZo
   }
 }
 
-function buildRiskMapStats(zones: RiskMapHighZone[], latestResults: RiskGridResult[]): RiskMapStats {
+function buildRiskMapStats(results: RiskGridResult[], recentReportCount?: number): RiskMapStats {
   const highRiskGrades = new Set<RiskMapHighZoneGrade>(['긴급', '매우 높음', '위험', '높음'])
-  const highRiskCount = zones.filter((zone) => zone.riskPercent >= 70 || highRiskGrades.has(zone.riskGrade)).length
+  const highRiskCount = results.filter((result) => {
+    const riskPercent = normalizeRiskScore(result)
+    return riskPercent >= 70 || highRiskGrades.has(getRiskGrade(result, riskPercent))
+  }).length
 
   return {
     ...riskMapStats,
     highRiskCount,
-    recentReportCount: latestResults.length || riskMapStats.recentReportCount,
+    recentReportCount: recentReportCount ?? riskMapStats.recentReportCount,
     highRiskDelta: Math.max(0, highRiskCount - riskMapStats.highRiskCount),
   }
 }
@@ -429,7 +460,7 @@ function RiskLegendCard() {
         ))}
       </div>
       <p className="mt-2 text-[11px] font-semibold leading-relaxed tracking-[-0.04em] text-slate-500">
-        위험도는 AI 모델의 예측된 포트홀 발생 확률입니다.
+        지도 원형 마커 기준 위험도 색상입니다.
       </p>
     </section>
   )
@@ -627,9 +658,10 @@ export function RiskMapPage() {
       setIsRiskLoading(true)
       setRiskNotice('')
 
-      const [latestResult, zonesResult] = await Promise.allSettled([
+      const [latestResult, zonesResult, reportsResult] = await Promise.allSettled([
         getLatestGridRiskResults(),
         getRiskZones(),
+        getCitizenReports(50),
       ])
 
       if (ignore) {
@@ -638,15 +670,20 @@ export function RiskMapPage() {
 
       const latestRows = latestResult.status === 'fulfilled' ? latestResult.value : []
       const zoneRows = zonesResult.status === 'fulfilled' ? zonesResult.value : []
-      const apiZones = zoneRows.slice(0, 8).map(toRiskMapHighZone)
-      const markerRows = latestRows.length > 0 ? latestRows : zoneRows
-      const displayMarkerRows = markerRows.length > 0 ? markerRows : fallbackRiskGridResults
+      const reportRows = reportsResult.status === 'fulfilled' ? reportsResult.value : []
+      const recentReportCount = reportsResult.status === 'fulfilled' ? reportRows.length : undefined
+      const mapRows = latestRows.length > 0 ? latestRows : zoneRows
+      const mapCoordinateRows = mapRows.filter(hasMapCoordinates)
+      const displayGridRows = mapCoordinateRows.length > 0 ? mapCoordinateRows : fallbackRiskGridResults
+      const zoneSourceRows = zoneRows.length > 0 ? zoneRows : latestRows
+      const sortedRiskRows = sortRiskRowsByPriority(zoneSourceRows)
+      const apiZones = sortedRiskRows.slice(0, 8).map(toRiskMapHighZone)
 
-      setGridResults(displayMarkerRows)
+      setGridResults(displayGridRows)
 
       if (apiZones.length > 0) {
         setZones(apiZones)
-        setStats(buildRiskMapStats(apiZones, displayMarkerRows))
+        setStats(buildRiskMapStats(mapRows, recentReportCount))
       } else {
         setZones(riskHighZones)
         setStats(riskMapStats)
@@ -654,7 +691,7 @@ export function RiskMapPage() {
         setSelectedGridCode(undefined)
       }
 
-      if (apiZones.length === 0) {
+      if (mapCoordinateRows.length === 0) {
         setRiskNotice(LOCAL_RISK_FALLBACK_NOTICE)
       }
 

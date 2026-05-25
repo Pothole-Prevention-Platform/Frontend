@@ -1,6 +1,7 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ChevronRight, LocateFixed, MapPin, ShieldCheck, Siren } from 'lucide-react'
 import { Circle, CustomOverlayMap, Map, Polyline, ZoomControl, useKakaoLoader } from 'react-kakao-maps-sdk'
+import { getDrivingRoute } from '../../api/routeApi'
 import type { AlertRiskLevel, RoutePreview } from '../../types'
 import { cn } from '../../utils/cn'
 
@@ -161,9 +162,46 @@ export function KakaoAlertRouteMap({
     appkey: kakaoJavaScriptKey,
   })
   const route = useMemo(() => buildRoute(alert, isRerouted), [alert, isRerouted])
+  const [roadPath, setRoadPath] = useState<LatLng[]>(route.path)
+  const [isRouteLoading, setIsRouteLoading] = useState(false)
   const mapRef = useRef<kakao.maps.Map | null>(null)
   const isSafeRoute = alert.riskLevel === 'safe'
   const riskTone = riskToneByLevel[alert.riskLevel]
+
+  useEffect(() => {
+    let isActive = true
+
+    setRoadPath(route.path)
+    setIsRouteLoading(true)
+
+    void getDrivingRoute({
+      destination: route.destination,
+      origin: route.start,
+      // Keep alert markers visual-only. Off-road waypoint snapping can make the road route loop around itself.
+      waypoints: [],
+    })
+      .then((drivingRoute) => {
+        if (!isActive) {
+          return
+        }
+
+        setRoadPath(drivingRoute.path.length >= 2 ? drivingRoute.path : route.path)
+      })
+      .catch(() => {
+        if (isActive) {
+          setRoadPath(route.path)
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsRouteLoading(false)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [route])
 
   if (!kakaoJavaScriptKey) {
     return (
@@ -195,7 +233,7 @@ export function KakaoAlertRouteMap({
       >
         <Polyline
           endArrow
-          path={route.path}
+          path={roadPath}
           strokeColor={isRerouted || isSafeRoute ? '#16A34A' : '#2487EB'}
           strokeOpacity={0.9}
           strokeWeight={7}
@@ -232,6 +270,12 @@ export function KakaoAlertRouteMap({
       {isLoading && (
         <div className="absolute right-4 top-4 z-20 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[12px] font-bold text-blue-700 shadow-sm">
           카카오 지도를 불러오는 중입니다.
+        </div>
+      )}
+
+      {!isLoading && isRouteLoading && (
+        <div className="absolute right-4 top-4 z-20 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[12px] font-bold text-blue-700 shadow-sm">
+          실제 도로 경로를 계산하는 중입니다.
         </div>
       )}
 

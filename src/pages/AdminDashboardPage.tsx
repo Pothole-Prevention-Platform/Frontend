@@ -1,9 +1,7 @@
-import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   CircleHelp,
   ClipboardCheck,
   Download,
@@ -12,32 +10,35 @@ import {
   Wrench,
   XCircle,
 } from 'lucide-react'
+import { CustomOverlayMap, Map as KakaoMap, ZoomControl, useKakaoLoader } from 'react-kakao-maps-sdk'
+import { getCitizenReports } from '../api/reportApi'
 import { getDistrictRiskRanking, getRiskZones } from '../api/riskApi'
 import {
   adminFilters,
-  adminKpiStats,
   adminMapRiskPoints,
   adminPriorityAreas,
-  adminRiskDistribution,
-  adminStatusSummary,
-  adminTrendData,
 } from '../data/mockData'
 import type {
   AdminColorType,
   AdminKpiIconType,
+  AdminKpiStat,
   AdminMapRiskPoint,
   AdminMapRiskLevel,
   AdminPriorityArea,
   AdminPriorityTab,
   AdminRiskDistributionItem,
   AdminRiskGrade,
+  AdminStatusSummaryItem,
   AdminStatusIconType,
+  AdminTrendDatum,
+  CitizenReportResponse,
   RiskDistrictRanking,
   RiskGridResult,
 } from '../types'
 import { cn } from '../utils/cn'
 
 type RepairTargetType = 'district' | 'report'
+type TrendViewMode = '일별' | '주별'
 
 type SelectControlProps = {
   id: string
@@ -48,13 +49,19 @@ type SelectControlProps = {
   className?: string
 }
 
-const districtOptions = ['전체', '강남구', '강북구', '영등포구', '관악구', '노원구', '서초구', '송파구', '마포구', '용산구']
-const periodOptions = ['최근 30일 (2024.05.07 ~ 2024.06.05)', '최근 7일', '이번 달', '전월']
-const statusOptions = ['전체', '접수 대기', '접수 완료', '보수 진행 중', '보수 완료', '반려']
+const districtOptions = ['전체', '강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구']
+const periodOptions = ['최근 30일', '최근 7일', '오늘', '전체']
+const trendViewOptions: TrendViewMode[] = ['일별', '주별']
+const statusOptions = ['전체', '포트홀 판정', '일반 신고', '검토 필요']
 const departmentOptions = ['선택하세요', '서울시 도로관리과', '강남구 도로보수팀', '강북구 안전건설과', '영등포구 도로관리팀', '관악구 치수도로과']
-const assignmentDistrictOptions = ['자치구를 선택하세요', '강남구', '강북구', '영등포구', '관악구', '노원구', '서초구', '송파구']
+const assignmentDistrictOptions = ['자치구를 선택하세요', ...districtOptions.filter((option) => option !== '전체')]
 const priorityLevels: AdminRiskGrade[] = ['긴급', '주의', '관심']
 const LOCAL_RISK_FALLBACK_NOTICE = '현재 로컬 위험도 계산 결과가 없어 예시 데이터를 표시하고 있습니다.'
+
+const SEOUL_CENTER = {
+  lat: 37.5665,
+  lng: 126.978,
+}
 
 const colorStyles: Record<AdminColorType, { text: string; value: string; softBg: string; iconBg: string; dot: string; ring: string }> = {
   blue: {
@@ -168,22 +175,6 @@ const mapRiskStyles: Record<AdminMapRiskLevel, { marker: string; halo: string; l
   },
 }
 
-const mapLabels = [
-  { name: '도봉구', x: 54, y: 10 },
-  { name: '노원구', x: 76, y: 20 },
-  { name: '은평구', x: 22, y: 26 },
-  { name: '광진구', x: 73, y: 49 },
-  { name: '중랑구', x: 78, y: 36 },
-  { name: '마포구', x: 14, y: 49 },
-  { name: '용산구', x: 49, y: 59 },
-  { name: '양천구', x: 15, y: 68 },
-  { name: '영등포구', x: 31, y: 69 },
-  { name: '금천구', x: 23, y: 86 },
-  { name: '관악구', x: 52, y: 86 },
-  { name: '서초구', x: 68, y: 83 },
-  { name: '송파구', x: 86, y: 73 },
-]
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
@@ -274,12 +265,16 @@ function toAdminMapRiskPoints(rows: RiskGridResult[]): AdminMapRiskPoint[] {
     const fallback = adminMapRiskPoints[index % adminMapRiskPoints.length]
     const score = normalizeRiskScore(row)
     const position = getMapPosition(row, fallback)
+    const lat = getNumberField(row, ['centerLat'])
+    const lng = getNumberField(row, ['centerLng'])
     const district = getStringField(row, ['districtName', 'district', 'guName']) ?? fallback.district
     const id = getStringField(row, ['gridCode', 'gridId', 'id']) ?? `risk-point-api-${index}`
 
     return {
       id,
       district,
+      lat,
+      lng,
       value: score,
       level: getAdminMapRiskLevel(score),
       x: position.x,
@@ -346,6 +341,377 @@ function toPriorityAreasFromZones(rows: RiskGridResult[]): AdminPriorityArea[] {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ko-KR').format(value)
+}
+
+function formatPercent(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
+function getReportDate(report: CitizenReportResponse) {
+  const value = getStringField(report, ['submittedAt', 'createdAt', 'reportedAt'])
+
+  if (!value) {
+    return undefined
+  }
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date
+}
+
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(date).replace(/\.$/, '')
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date)
+  nextDate.setDate(nextDate.getDate() + days)
+  return nextDate
+}
+
+function getLocalDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function getWeekStart(date: Date) {
+  const day = date.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+
+  return addDays(startOfLocalDay(date), diff)
+}
+
+function getTrendWindow(reports: CitizenReportResponse[], period: string) {
+  const today = startOfLocalDay(new Date())
+  const reportDates = reports.map(getReportDate).filter((date): date is Date => Boolean(date)).map(startOfLocalDay)
+
+  if (period === '오늘') {
+    return { end: today, start: today }
+  }
+
+  if (period === '최근 7일') {
+    return { end: today, start: addDays(today, -6) }
+  }
+
+  if (period === '최근 30일') {
+    if (reportDates.length === 0) {
+      return { end: today, start: addDays(today, -6) }
+    }
+
+    const periodStart = addDays(today, -29)
+    const earliestDate = new Date(Math.min(...reportDates.map((date) => date.getTime())))
+    const firstReportDate = earliestDate < periodStart ? periodStart : earliestDate
+    const minimumWindowStart = addDays(today, -6)
+
+    return {
+      end: today,
+      start: firstReportDate > minimumWindowStart ? minimumWindowStart : firstReportDate,
+    }
+  }
+
+  if (reportDates.length === 0) {
+    return { end: today, start: addDays(today, -6) }
+  }
+
+  const earliestDate = new Date(Math.min(...reportDates.map((date) => date.getTime())))
+
+  return {
+    end: today,
+    start: earliestDate < addDays(today, -59) ? addDays(today, -59) : earliestDate,
+  }
+}
+
+function formatTrendDateRange(startDate: Date, endDate: Date) {
+  const startLabel = formatShortDate(startDate)
+  const endLabel = formatShortDate(endDate)
+
+  return startLabel === endLabel ? startLabel : `${startLabel}~${endLabel}`
+}
+
+function formatLastUpdated(date: Date | null) {
+  if (!date) {
+    return '아직 업데이트되지 않음'
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+function getReportDistrict(report: CitizenReportResponse) {
+  const address = getStringField(report, ['address', 'location'])
+  const match = address?.match(/([가-힣]+구)/)
+  return match?.[1]
+}
+
+function getReportRiskScore(report: CitizenReportResponse) {
+  const score = getNumberField(report, ['riskScore'])
+
+  if (score !== undefined) {
+    return score <= 10 ? score * 10 : score
+  }
+
+  const severity = getStringField(report, ['severity'])
+
+  if (severity === 'LARGE' || severity === 'CRITICAL' || severity === 'HIGH') {
+    return 90
+  }
+
+  if (severity === 'MEDIUM') {
+    return 60
+  }
+
+  if (severity === 'SMALL' || severity === 'LOW') {
+    return 30
+  }
+
+  return 0
+}
+
+function isPotholeReport(report: CitizenReportResponse) {
+  return report.isPothole === true || getReportRiskScore(report) >= 70
+}
+
+function matchesReportStatus(report: CitizenReportResponse, status: string) {
+  if (status === '전체') {
+    return true
+  }
+
+  if (status === '포트홀 판정') {
+    return isPotholeReport(report)
+  }
+
+  if (status === '일반 신고') {
+    return report.isPothole === false
+  }
+
+  return report.isPothole !== true && report.isPothole !== false
+}
+
+function isInPeriod(report: CitizenReportResponse, period: string) {
+  if (period === '전체') {
+    return true
+  }
+
+  const date = getReportDate(report)
+
+  if (!date) {
+    return false
+  }
+
+  const now = new Date()
+  const elapsedDays = (now.getTime() - date.getTime()) / 86_400_000
+
+  if (period === '오늘') {
+    return date.toDateString() === now.toDateString()
+  }
+
+  if (period === '최근 7일') {
+    return elapsedDays <= 7
+  }
+
+  return elapsedDays <= 30
+}
+
+function filterReports(reports: CitizenReportResponse[], district: string, period: string, status: string) {
+  return reports.filter((report) => {
+    const districtMatches = district === '전체' || getReportDistrict(report) === district
+    return districtMatches && isInPeriod(report, period) && matchesReportStatus(report, status)
+  })
+}
+
+function getRiskLevelLabel(row: RiskGridResult) {
+  const level = getStringField(row, ['riskLevel', 'riskGrade', 'grade', 'level'])
+
+  if (level === '위험' || level === '주의' || level === '관심' || level === '안전') {
+    return level
+  }
+
+  const score = normalizeRiskScore(row)
+
+  if (score >= 70) {
+    return '위험'
+  }
+
+  if (score >= 45) {
+    return '주의'
+  }
+
+  if (score >= 20) {
+    return '관심'
+  }
+
+  return '안전'
+}
+
+function buildRiskDistribution(rows: RiskGridResult[]): AdminRiskDistributionItem[] {
+  const total = Math.max(1, rows.length)
+  const counts = rows.reduce<Record<string, number>>(
+    (acc, row) => {
+      const label = getRiskLevelLabel(row)
+      acc[label] += 1
+      return acc
+    },
+    { 관심: 0, 안전: 0, 위험: 0, 주의: 0 },
+  )
+
+  const meta: Array<{ colorType: AdminColorType; id: string; label: string }> = [
+    { colorType: 'red', id: 'danger', label: '위험' },
+    { colorType: 'orange', id: 'warning', label: '주의' },
+    { colorType: 'yellow', id: 'attention', label: '관심' },
+    { colorType: 'green', id: 'safe', label: '안전' },
+  ]
+
+  return meta.map((item) => ({
+    ...item,
+    count: counts[item.label] ?? 0,
+    percent: ((counts[item.label] ?? 0) / total) * 100,
+  }))
+}
+
+function buildTrendData(reports: CitizenReportResponse[], period: string, viewMode: TrendViewMode): AdminTrendDatum[] {
+  const trendWindow = getTrendWindow(reports, period)
+  const bucketMap = new Map<string, { endDate: Date; potholeCount: number; reportCount: number; startDate: Date }>()
+  const firstBucketStart = viewMode === '주별' ? getWeekStart(trendWindow.start) : trendWindow.start
+
+  for (let cursor = firstBucketStart; cursor <= trendWindow.end; cursor = addDays(cursor, viewMode === '주별' ? 7 : 1)) {
+    const bucketStartDate = startOfLocalDay(cursor)
+    const startDate = new Date(Math.max(bucketStartDate.getTime(), trendWindow.start.getTime()))
+    const endDate = viewMode === '주별'
+      ? new Date(Math.min(addDays(bucketStartDate, 6).getTime(), trendWindow.end.getTime()))
+      : startDate
+
+    bucketMap.set(getLocalDateKey(bucketStartDate), {
+      endDate,
+      potholeCount: 0,
+      reportCount: 0,
+      startDate,
+    })
+  }
+
+  reports.forEach((report) => {
+    const date = getReportDate(report)
+
+    if (!date) {
+      return
+    }
+
+    const reportDate = startOfLocalDay(date)
+
+    if (reportDate < trendWindow.start || reportDate > trendWindow.end) {
+      return
+    }
+
+    const key = getLocalDateKey(viewMode === '주별' ? getWeekStart(reportDate) : reportDate)
+    const current = bucketMap.get(key)
+
+    if (!current) {
+      return
+    }
+
+    current.reportCount += 1
+    current.potholeCount += isPotholeReport(report) ? 1 : 0
+  })
+
+  return Array.from(bucketMap.values())
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+    .map((item) => ({
+      completionRate: item.reportCount > 0 ? Math.round((item.potholeCount / item.reportCount) * 100) : 0,
+      date: formatTrendDateRange(item.startDate, item.endDate),
+      repairedCount: item.potholeCount,
+      reportCount: item.reportCount,
+    }))
+}
+
+function buildKpiStats(reports: CitizenReportResponse[], zones: RiskGridResult[], distribution: AdminRiskDistributionItem[]): AdminKpiStat[] {
+  const totalReports = reports.length
+  const warningOrHigherCount = zones.filter((zone) => {
+    const level = getRiskLevelLabel(zone)
+    return level === '위험' || level === '주의'
+  }).length
+  const potholeReports = reports.filter(isPotholeReport).length
+  const reportDates = reports.map(getReportDate).filter((date): date is Date => Boolean(date))
+  const averageElapsedHours = reportDates.length > 0
+    ? reportDates.reduce((sum, date) => sum + Math.max(0, Date.now() - date.getTime()) / 3_600_000, 0) / reportDates.length
+    : 0
+  const safeItem = distribution.find((item) => item.label === '안전')
+  const safeRate = safeItem?.percent ?? 0
+
+  return [
+    {
+      colorType: 'blue',
+      deltaDirection: 'up',
+      deltaLabel: '실시간',
+      description: `최근 조회 ${formatNumber(totalReports)}건`,
+      iconType: 'filePlus',
+      id: 'total-reports',
+      title: '최근 신고 건수',
+      unit: '건',
+      value: formatNumber(totalReports),
+    },
+    {
+      colorType: 'red',
+      deltaDirection: 'up',
+      deltaLabel: `${formatNumber(warningOrHigherCount)}건`,
+      description: '주의 이상 격자',
+      iconType: 'alertTriangle',
+      id: 'urgent-repair',
+      title: '우선 확인 필요',
+      unit: '건',
+      value: formatNumber(warningOrHigherCount),
+    },
+    {
+      colorType: 'orange',
+      deltaDirection: 'down',
+      deltaLabel: `${formatNumber(potholeReports)}건`,
+      description: '포트홀 판정 신고',
+      iconType: 'clock',
+      id: 'average-processing-time',
+      title: '평균 접수 경과',
+      unit: '시간',
+      value: averageElapsedHours > 0 ? averageElapsedHours.toFixed(1) : '0',
+    },
+    {
+      colorType: 'teal',
+      deltaDirection: 'up',
+      deltaLabel: `${formatPercent(safeRate)}%`,
+      description: '안전 등급 격자 비율',
+      iconType: 'cpu',
+      id: 'completion-rate',
+      title: '안전 격자율',
+      unit: '%',
+      value: safeRate.toFixed(1),
+    },
+  ]
+}
+
+function buildStatusSummary(reports: CitizenReportResponse[], zones: RiskGridResult[]): AdminStatusSummaryItem[] {
+  const potholeCount = reports.filter(isPotholeReport).length
+  const normalCount = reports.filter((report) => report.isPothole === false).length
+  const reviewCount = reports.length - potholeCount - normalCount
+  const warningOrHigherCount = zones.filter((zone) => ['위험', '주의'].includes(getRiskLevelLabel(zone))).length
+  const safeCount = zones.filter((zone) => getRiskLevelLabel(zone) === '안전').length
+
+  return [
+    { colorType: 'blue', count: reports.length, iconType: 'fileText', id: 'recent-reports', label: '최근 신고' },
+    { colorType: 'orange', count: potholeCount, iconType: 'clipboard', id: 'pothole-reports', label: '포트홀 판정' },
+    { colorType: 'gray', count: normalCount + reviewCount, iconType: 'x', id: 'non-pothole-reports', label: '일반/검토 신고' },
+    { colorType: 'red', count: warningOrHigherCount, iconType: 'wrench', id: 'warning-zones', label: '주의 이상 격자' },
+    { colorType: 'green', count: safeCount, iconType: 'check', id: 'safe-zones', label: '안전 격자' },
+  ]
 }
 
 function panelClass(className?: string) {
@@ -498,7 +864,7 @@ function kpiIcon(iconType: AdminKpiIconType) {
   return <KpiAiChipIcon />
 }
 
-function KpiCard({ stat }: { stat: (typeof adminKpiStats)[number] }) {
+function KpiCard({ stat }: { stat: AdminKpiStat }) {
   const color = colorStyles[stat.colorType]
   const directionLabel = stat.deltaDirection === 'up' ? '▲' : '▼'
   const deltaClass = stat.id === 'urgent-repair' ? 'text-red-500' : stat.deltaDirection === 'down' ? 'text-emerald-600' : color.text
@@ -539,41 +905,81 @@ function LegendItem({ colorClass, label }: { colorClass: string; label: string }
   )
 }
 
-function TrendChart() {
-  const [viewMode, setViewMode] = useState('일별')
+function TrendChart({ period, reports }: { period: string; reports: CitizenReportResponse[] }) {
+  const [viewMode, setViewMode] = useState<TrendViewMode>('일별')
+  const chartData = useMemo(() => buildTrendData(reports, period, viewMode), [period, reports, viewMode])
   const width = 760
   const height = 280
   const margin = { top: 24, right: 44, bottom: 42, left: 46 }
   const plotWidth = width - margin.left - margin.right
   const plotHeight = height - margin.top - margin.bottom
-  const maxCount = 120
-  const groupWidth = plotWidth / adminTrendData.length
-  const barWidth = 11
-  const linePoints = adminTrendData
-    .map((item, index) => {
-      const x = margin.left + groupWidth * index + groupWidth / 2
-      const y = margin.top + ((100 - item.completionRate) / 100) * plotHeight
-      return `${x},${y}`
-    })
-    .join(' ')
+  const maxCount = Math.max(5, Math.ceil(Math.max(...chartData.flatMap((item) => [item.reportCount, item.repairedCount]), 1) * 1.2))
+  const groupWidth = plotWidth / Math.max(1, chartData.length)
+  const barWidth = Math.max(4, Math.min(11, Math.floor(groupWidth * 0.25)))
+  const barGap = Math.max(2, Math.min(5, Math.floor(groupWidth * 0.08)))
+  const labelInterval = chartData.length > 14 ? Math.ceil(chartData.length / 8) : 1
+  const labelIndexes = new Set<number>()
+  const lastDataIndex = chartData.length - 1
+
+  chartData.forEach((_, index) => {
+    if (index % labelInterval === 0) {
+      labelIndexes.add(index)
+    }
+  })
+
+  if (!labelIndexes.has(lastDataIndex)) {
+    const lastShownIndex = Math.max(...labelIndexes)
+    const minimumLastLabelGap = Math.max(2, Math.floor(labelInterval / 2))
+
+    if (lastDataIndex - lastShownIndex >= minimumLastLabelGap) {
+      labelIndexes.add(lastDataIndex)
+    }
+  }
+
+  const countTicks = [1, 0.8, 0.6, 0.4, 0.2, 0]
+    .map((ratio) => Math.round(maxCount * ratio))
+    .filter((tick, index, ticks) => index === 0 || tick !== ticks[index - 1])
+  const lineSegments = chartData.reduce<string[][]>((segments, item, index) => {
+    if (item.reportCount === 0) {
+      if (segments[segments.length - 1]?.length === 0) {
+        return segments
+      }
+
+      return [...segments, []]
+    }
+
+    const x = margin.left + groupWidth * index + groupWidth / 2
+    const y = margin.top + ((100 - item.completionRate) / 100) * plotHeight
+    const nextSegments = segments.length > 0 ? [...segments] : [[]]
+    nextSegments[nextSegments.length - 1] = [...nextSegments[nextSegments.length - 1], `${x},${y}`]
+
+    return nextSegments
+  }, [[]]).filter((segment) => segment.length > 0)
 
   return (
     <section className={panelClass()}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SectionTitle title="신고 및 처리 현황 추이" />
-        <SelectControl id="admin-trend-view" label="집계" value={viewMode} options={['일별', '주별']} onChange={setViewMode} className="h-9 min-w-[112px] px-3 shadow-sm sm:w-auto" />
+        <SelectControl
+          id="admin-trend-view"
+          label="집계"
+          value={viewMode}
+          options={trendViewOptions}
+          onChange={(value) => setViewMode(value === '주별' ? '주별' : '일별')}
+          className="h-9 min-w-[112px] px-3 shadow-sm sm:w-auto"
+        />
       </div>
       <div className="mb-3 flex flex-wrap justify-center gap-4 text-[12px] font-bold text-slate-600">
         <LegendItem colorClass="bg-blue-600" label="신고 건수" />
-        <LegendItem colorClass="bg-emerald-500" label="보수 완료 건수" />
-        <LegendItem colorClass="bg-purple-600" label="보수 완료율(%)" />
+        <LegendItem colorClass="bg-emerald-500" label="포트홀 판정 건수" />
+        <LegendItem colorClass="bg-purple-600" label="포트홀 판정 비율(%)" />
       </div>
       <div className="overflow-hidden rounded-xl bg-white">
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="최근 30일 신고 건수, 보수 완료 건수, 보수 완료율 추이" className="h-[190px] w-full sm:h-[205px]">
-          {[120, 100, 80, 60, 40, 20, 0].map((tick) => {
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="최근 신고 건수와 포트홀 판정 비율 추이" className="h-[190px] w-full sm:h-[205px]">
+          {countTicks.map((tick, index) => {
             const y = margin.top + ((maxCount - tick) / maxCount) * plotHeight
             return (
-              <g key={tick}>
+              <g key={`${tick}-${index}`}>
                 <text x={34} y={y + 4} textAnchor="end" className="fill-slate-400 text-[11px] font-bold">
                   {tick}
                 </text>
@@ -589,25 +995,34 @@ function TrendChart() {
               </text>
             )
           })}
-          {adminTrendData.map((item, index) => {
+          {chartData.map((item, index) => {
             const centerX = margin.left + groupWidth * index + groupWidth / 2
             const reportHeight = (item.reportCount / maxCount) * plotHeight
             const repairedHeight = (item.repairedCount / maxCount) * plotHeight
             const reportY = margin.top + plotHeight - reportHeight
             const repairedY = margin.top + plotHeight - repairedHeight
+            const showLabel = labelIndexes.has(index)
 
             return (
               <g key={item.date}>
-                <rect x={centerX - barWidth - 2} y={reportY} width={barWidth} height={reportHeight} rx="3" fill="#2563EB" />
-                <rect x={centerX + 2} y={repairedY} width={barWidth} height={repairedHeight} rx="3" fill="#10B981" />
-                <text x={centerX} y={height - 16} textAnchor="middle" className="fill-slate-500 text-[11px] font-bold">
-                  {item.date}
-                </text>
+                <rect x={centerX - barWidth - barGap / 2} y={reportY} width={barWidth} height={reportHeight} rx="3" fill="#2563EB" />
+                <rect x={centerX + barGap / 2} y={repairedY} width={barWidth} height={repairedHeight} rx="3" fill="#10B981" />
+                {showLabel && (
+                  <text x={centerX} y={height - 16} textAnchor="middle" className="fill-slate-500 text-[11px] font-bold">
+                    {item.date}
+                  </text>
+                )}
               </g>
             )
           })}
-          <polyline points={linePoints} fill="none" stroke="#7C3AED" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          {adminTrendData.map((item, index) => {
+          {lineSegments.map((segment, index) => (
+            <polyline key={`rate-line-${index}`} points={segment.join(' ')} fill="none" stroke="#7C3AED" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+          {chartData.map((item, index) => {
+            if (item.reportCount === 0) {
+              return null
+            }
+
             const x = margin.left + groupWidth * index + groupWidth / 2
             const y = margin.top + ((100 - item.completionRate) / 100) * plotHeight
             return <circle key={`${item.date}-rate`} cx={x} cy={y} r="4" fill="#7C3AED" stroke="#FFFFFF" strokeWidth="2" />
@@ -630,25 +1045,25 @@ function buildDonutGradient(items: AdminRiskDistributionItem[]) {
   return `conic-gradient(${segments.join(', ')})`
 }
 
-function DonutChart() {
+function DonutChart({ items }: { items: AdminRiskDistributionItem[] }) {
   const [scope, setScope] = useState('전체')
-  const total = adminRiskDistribution.reduce((sum, item) => sum + item.count, 0)
+  const total = items.reduce((sum, item) => sum + item.count, 0)
 
   return (
     <section className={panelClass()}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <SectionTitle title="위험도별 신고 분포" />
-        <SelectControl id="admin-risk-distribution-scope" label="범위" value={scope} options={['전체', '미처리', '보수 완료']} onChange={setScope} className="h-9 min-w-[108px] px-3 shadow-sm sm:w-auto" />
+        <SectionTitle title="위험도별 격자 분포" />
+        <SelectControl id="admin-risk-distribution-scope" label="범위" value={scope} options={['전체']} onChange={setScope} className="h-9 min-w-[108px] px-3 shadow-sm sm:w-auto" />
       </div>
       <div className="grid items-center gap-5 sm:grid-cols-[165px_1fr] xl:grid-cols-1 2xl:grid-cols-[165px_1fr]">
-        <div className="relative mx-auto h-[165px] w-[165px] rounded-full" style={{ background: buildDonutGradient(adminRiskDistribution) }} aria-label="위험도별 신고 분포 도넛 차트">
+        <div className="relative mx-auto h-[165px] w-[165px] rounded-full" style={{ background: buildDonutGradient(items) }} aria-label="위험도별 격자 분포 도넛 차트">
           <div className="absolute inset-[28px] flex flex-col items-center justify-center rounded-full bg-white shadow-inner">
             <span className="text-[12px] font-bold text-slate-500">총</span>
             <span className="text-[22px] font-black text-slate-950">{formatNumber(total)}건</span>
           </div>
         </div>
         <div className="space-y-3">
-          {adminRiskDistribution.map((item) => (
+          {items.map((item) => (
             <div key={item.id} className="flex items-center justify-between gap-4 text-[13px] font-bold text-slate-600">
               <span className="flex items-center gap-2">
                 <span className={cn('h-3 w-3 rounded-sm', colorStyles[item.colorType].dot)} aria-hidden="true" />
@@ -663,76 +1078,51 @@ function DonutChart() {
   )
 }
 
-function ImageWithFallback({ sources, alt, className, fallback }: { sources: string[]; alt: string; className: string; fallback: ReactNode }) {
-  const [sourceIndex, setSourceIndex] = useState(0)
-  const source = sources[sourceIndex]
-
-  if (!source) {
-    return <>{fallback}</>
-  }
-
-  return <img src={source} alt={alt} className={className} onError={() => setSourceIndex((current) => current + 1)} />
-}
-
-function MapBaseIllustration() {
-  return (
-    <div className="absolute inset-0 overflow-hidden bg-slate-100">
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(148,163,184,0.15)_1px,transparent_1px),linear-gradient(rgba(148,163,184,0.15)_1px,transparent_1px)] bg-[size:28px_28px]" />
-      <div className="absolute left-[-35px] top-[82px] h-6 w-[470px] rotate-[-12deg] rounded-full bg-sky-100 shadow-[0_0_0_6px_rgba(255,255,255,0.55)]" />
-      <div className="absolute left-[-20px] top-[150px] h-8 w-[460px] rotate-[15deg] rounded-full bg-sky-100 shadow-[0_0_0_6px_rgba(255,255,255,0.55)]" />
-      <div className="absolute left-[55px] top-[-20px] h-[310px] w-4 rotate-[23deg] rounded-full bg-emerald-100 shadow-[0_0_0_6px_rgba(255,255,255,0.5)]" />
-      <div className="absolute left-[210px] top-[-30px] h-[330px] w-3 rotate-[-28deg] rounded-full bg-slate-200/70" />
-    </div>
-  )
-}
-
-function SeoulRiskMap({ onMockAction, points }: { onMockAction: (message: string) => void; points: AdminMapRiskPoint[] }) {
+function SeoulRiskMap({ points }: { points: AdminMapRiskPoint[] }) {
   const [scope, setScope] = useState('전체')
+  const kakaoJavaScriptKey = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY?.trim() ?? ''
+  const [isMapLoading, mapError] = useKakaoLoader({
+    appkey: kakaoJavaScriptKey,
+  })
+  const positionedPoints = points.filter((point) => typeof point.lat === 'number' && Number.isFinite(point.lat) && typeof point.lng === 'number' && Number.isFinite(point.lng))
 
   return (
     <section className={panelClass()}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SectionTitle title="서울특별시 위험 분포" />
-        <SelectControl id="admin-map-scope" label="범위" value={scope} options={['전체', '미처리', '긴급']} onChange={setScope} className="h-9 min-w-[108px] px-3 shadow-sm sm:w-auto" />
+        <SelectControl id="admin-map-scope" label="범위" value={scope} options={['전체', '주의 이상']} onChange={setScope} className="h-9 min-w-[108px] px-3 shadow-sm sm:w-auto" />
       </div>
-      <div className="relative h-[200px] overflow-hidden rounded-xl border border-slate-100 bg-slate-100" role="img" aria-label="서울특별시 위험 분포 지도">
-        <ImageWithFallback
-          sources={['/assets/admin/admin-risk-map.webp', '/assets/admin/admin-risk-map.png']}
-          alt="서울특별시 위험 분포 지도"
-          className="absolute inset-0 h-full w-full object-cover"
-          fallback={<MapBaseIllustration />}
-        />
-        {mapLabels.map((label) => (
-          <span
-            key={label.name}
-            className="absolute rounded bg-white/70 px-1.5 py-0.5 text-[11px] font-black text-slate-700 shadow-sm backdrop-blur-sm"
-            style={{ left: `${label.x}%`, top: `${label.y}%` }}
-          >
-            {label.name}
-          </span>
-        ))}
-        {points.map((point) => {
-          const style = mapRiskStyles[point.level]
+      <div className="relative h-[200px] overflow-hidden rounded-xl border border-slate-100 bg-slate-100" aria-label="서울특별시 위험 분포 지도">
+        {!kakaoJavaScriptKey || mapError ? (
+          <div className="flex h-full w-full items-center justify-center px-5 text-center text-[13px] font-bold leading-5 text-slate-600">
+            카카오 지도를 불러오지 못했습니다. JavaScript 키와 도메인 설정을 확인해 주세요.
+          </div>
+        ) : (
+          <KakaoMap center={SEOUL_CENTER} className="h-full w-full" level={8}>
+            <ZoomControl position="RIGHT" />
+            {(scope === '주의 이상' ? positionedPoints.filter((point) => point.value >= 45) : positionedPoints).map((point) => {
+              const style = mapRiskStyles[point.level]
 
-          return (
-            <div key={point.id} className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1" style={{ left: `${point.x}%`, top: `${point.y}%` }}>
-              <span className={cn('flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-black', style.marker, style.halo)}>
-                {point.value}
-              </span>
-              <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-black text-slate-700 shadow-sm">
-                {point.district}
-              </span>
-            </div>
-          )
-        })}
-        <div className="absolute bottom-3 left-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md">
-          <button type="button" aria-label="지도 확대" onClick={() => onMockAction('지도 확대 기능은 데모 화면입니다.')} className="flex h-8 w-8 items-center justify-center border-b border-slate-200 text-xl font-bold text-slate-700 transition hover:bg-blue-50">
-            +
-          </button>
-          <button type="button" aria-label="지도 축소" onClick={() => onMockAction('지도 축소 기능은 데모 화면입니다.')} className="flex h-8 w-8 items-center justify-center text-xl font-bold text-slate-700 transition hover:bg-blue-50">
-            −
-          </button>
-        </div>
+              return (
+                <CustomOverlayMap key={point.id} position={{ lat: point.lat ?? SEOUL_CENTER.lat, lng: point.lng ?? SEOUL_CENTER.lng }} yAnchor={0.5}>
+                  <div className="flex flex-col items-center gap-1">
+                    <span className={cn('flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-black shadow-lg', style.marker, style.halo)}>
+                      {point.value}
+                    </span>
+                    <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-black text-slate-700 shadow-sm">
+                      {point.district}
+                    </span>
+                  </div>
+                </CustomOverlayMap>
+              )
+            })}
+          </KakaoMap>
+        )}
+        {isMapLoading && (
+          <div className="absolute inset-x-3 bottom-3 rounded-lg bg-white/90 px-3 py-2 text-[12px] font-black text-blue-700 shadow-sm">
+            카카오 지도를 불러오는 중입니다.
+          </div>
+        )}
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] font-bold text-slate-600">
         <LegendItem colorClass="bg-red-500" label="매우 높음" />
@@ -960,7 +1350,7 @@ function RepairAssignmentCard({ onAssigned }: { onAssigned: (message: string) =>
       />
       <button
         type="button"
-        onClick={() => onAssigned('우선 보수 지정 기능은 데모 화면입니다.')}
+        onClick={() => onAssigned('우선 보수 지정 API가 아직 제공되지 않아 화면에서만 선택 내용을 확인했습니다.')}
         className="mt-2 h-9 w-full rounded-lg bg-gradient-to-r from-[#075ED5] to-[#0068E8] text-[14px] font-black text-white shadow-[0_14px_28px_rgba(0,95,220,0.22)] transition hover:from-blue-700 hover:to-blue-600"
       >
         우선 보수 지정
@@ -991,18 +1381,14 @@ function statusIcon(iconType: AdminStatusIconType) {
   return <XCircle {...props} />
 }
 
-function StatusSummary({ onMockAction }: { onMockAction: (message: string) => void }) {
+function StatusSummary({ items, lastUpdated, onRefresh }: { items: AdminStatusSummaryItem[]; lastUpdated: Date | null; onRefresh: () => void }) {
   return (
     <section className={panelClass()}>
       <div className="mb-4 flex items-center justify-between gap-3">
-        <SectionTitle title="처리 상태 요약" />
-        <button type="button" onClick={() => onMockAction('전체 보기 기능은 데모 화면입니다.')} className="flex shrink-0 items-center gap-1 text-[12px] font-black text-blue-700 transition hover:text-blue-800">
-          전체 보기
-          <ChevronRight size={14} aria-hidden="true" />
-        </button>
+        <SectionTitle title="실데이터 요약" />
       </div>
       <div className="space-y-1">
-        {adminStatusSummary.map((item) => {
+        {items.map((item) => {
           const color = colorStyles[item.colorType]
 
           return (
@@ -1021,8 +1407,8 @@ function StatusSummary({ onMockAction }: { onMockAction: (message: string) => vo
         })}
       </div>
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
-        <p className="text-[12px] font-semibold text-slate-500">마지막 업데이트: 2024.06.05 09:30</p>
-        <button type="button" aria-label="처리 상태 새로고침" onClick={() => onMockAction('새로고침 기능은 데모 화면입니다.')} className="rounded-lg p-2 text-blue-700 transition hover:bg-blue-50">
+        <p className="text-[12px] font-semibold text-slate-500">마지막 업데이트: {formatLastUpdated(lastUpdated)}</p>
+        <button type="button" aria-label="처리 상태 새로고침" onClick={onRefresh} className="rounded-lg p-2 text-blue-700 transition hover:bg-blue-50">
           <RefreshCcw size={18} aria-hidden="true" />
         </button>
       </div>
@@ -1030,16 +1416,38 @@ function StatusSummary({ onMockAction }: { onMockAction: (message: string) => vo
   )
 }
 
+function escapeCsv(value: unknown) {
+  const text = String(value ?? '')
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+}
+
+function downloadCsv(filename: string, rows: unknown[][]) {
+  const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\n')
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 export function AdminDashboardPage() {
   const [district, setDistrict] = useState(adminFilters.district)
-  const [period, setPeriod] = useState(adminFilters.periodLabel)
+  const [period, setPeriod] = useState(periodOptions[0])
   const [status, setStatus] = useState(adminFilters.status)
   const [selectedPriorityTab, setSelectedPriorityTab] = useState<AdminPriorityTab>('risk')
   const [priorityAreas, setPriorityAreas] = useState<AdminPriorityArea[]>(adminPriorityAreas)
   const [mapRiskPoints, setMapRiskPoints] = useState<AdminMapRiskPoint[]>(adminMapRiskPoints)
+  const [reports, setReports] = useState<CitizenReportResponse[]>([])
+  const [riskZones, setRiskZones] = useState<RiskGridResult[]>([])
   const [isRiskLoading, setIsRiskLoading] = useState(true)
   const [riskApiNotice, setRiskApiNotice] = useState('')
   const [mockMessage, setMockMessage] = useState('')
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
 
   useEffect(() => {
     let ignore = false
@@ -1049,9 +1457,28 @@ export function AdminDashboardPage() {
       setIsRiskLoading(true)
       setRiskApiNotice('')
 
-      const [zonesResult, rankingResult] = await Promise.allSettled([
+      const reportsPromise = getCitizenReports(50)
+      void reportsPromise
+        .then((reportRows) => {
+          if (ignore) {
+            return
+          }
+
+          setReports(reportRows)
+          setLastUpdated(new Date())
+        })
+        .catch(() => {
+          if (ignore) {
+            return
+          }
+
+          setReports([])
+        })
+
+      const [zonesResult, rankingResult, reportsResult] = await Promise.allSettled([
         getRiskZones(districtName),
         getDistrictRiskRanking(),
+        reportsPromise,
       ])
 
       if (ignore) {
@@ -1060,10 +1487,13 @@ export function AdminDashboardPage() {
 
       const zoneRows = zonesResult.status === 'fulfilled' ? zonesResult.value : []
       const rankingRows = rankingResult.status === 'fulfilled' ? rankingResult.value : []
+      const reportRows = reportsResult.status === 'fulfilled' ? reportsResult.value : []
       const filteredRankingRows = districtName
         ? rankingRows.filter((row) => getStringField(row, ['districtName', 'district', 'guName']) === districtName)
         : rankingRows
 
+      setReports(reportRows)
+      setRiskZones(zoneRows)
       setMapRiskPoints(zoneRows.length > 0 ? toAdminMapRiskPoints(zoneRows) : adminMapRiskPoints)
 
       if (filteredRankingRows.length > 0) {
@@ -1074,10 +1504,20 @@ export function AdminDashboardPage() {
         setPriorityAreas(adminPriorityAreas)
       }
 
-      if (zoneRows.length === 0) {
-        setRiskApiNotice(LOCAL_RISK_FALLBACK_NOTICE)
+      const noticeParts = []
+
+      if (zonesResult.status === 'rejected' || rankingResult.status === 'rejected') {
+        noticeParts.push('위험도 API 일부를 불러오지 못했습니다.')
+      } else if (zoneRows.length === 0) {
+        noticeParts.push(LOCAL_RISK_FALLBACK_NOTICE)
       }
 
+      if (reportsResult.status === 'rejected') {
+        noticeParts.push('최근 신고 API를 불러오지 못했습니다.')
+      }
+
+      setRiskApiNotice(noticeParts.join(' '))
+      setLastUpdated(new Date())
       setIsRiskLoading(false)
     }
 
@@ -1086,13 +1526,33 @@ export function AdminDashboardPage() {
     return () => {
       ignore = true
     }
-  }, [district])
+  }, [district, reloadToken])
 
   const resetFilters = () => {
     setDistrict(adminFilters.district)
-    setPeriod(adminFilters.periodLabel)
+    setPeriod(periodOptions[0])
     setStatus(adminFilters.status)
-    setMockMessage('필터가 기본값으로 초기화되었습니다. 위험도 API를 다시 조회합니다.')
+    setMockMessage('필터가 기본값으로 초기화되었습니다. 관리자 데이터를 다시 조회합니다.')
+  }
+
+  const filteredReports = useMemo(() => filterReports(reports, district, period, status), [district, period, reports, status])
+  const riskDistribution = useMemo(() => buildRiskDistribution(riskZones), [riskZones])
+  const dashboardKpiStats = useMemo(() => buildKpiStats(filteredReports, riskZones, riskDistribution), [filteredReports, riskDistribution, riskZones])
+  const statusSummary = useMemo(() => buildStatusSummary(filteredReports, riskZones), [filteredReports, riskZones])
+
+  const refreshDashboard = () => {
+    setReloadToken((value) => value + 1)
+    setMockMessage('관리자 데이터를 다시 조회합니다.')
+  }
+
+  const downloadDashboardData = () => {
+    downloadCsv('admin-dashboard-data.csv', [
+      ['구분', '식별자', '자치구/주소', '점수/건수', '상태', '시각'],
+      ...priorityAreas.map((area) => ['위험 우선순위', area.rank, area.district, area.reportCount, area.riskGrade, lastUpdated?.toISOString() ?? '']),
+      ...riskZones.slice(0, 500).map((zone) => ['위험 격자', getStringField(zone, ['gridCode', 'id']), getStringField(zone, ['districtName']), getNumberField(zone, ['riskScore']), getStringField(zone, ['riskLevel']), getStringField(zone, ['calculatedAt'])]),
+      ...filteredReports.map((report) => ['시민 신고', getStringField(report, ['reportId', 'id']), getStringField(report, ['address', 'location']), getReportRiskScore(report), isPotholeReport(report) ? '포트홀 판정' : '일반/검토', getStringField(report, ['submittedAt', 'createdAt'])]),
+    ])
+    setMockMessage('현재 화면 기준 CSV 데이터를 다운로드했습니다.')
   }
 
   return (
@@ -1114,7 +1574,7 @@ export function AdminDashboardPage() {
         onPeriodChange={setPeriod}
         onStatusChange={setStatus}
         onReset={resetFilters}
-        onDownload={() => setMockMessage('데이터 다운로드 기능은 데모 화면입니다. 실제 파일은 생성되지 않습니다.')}
+        onDownload={downloadDashboardData}
       />
 
       {mockMessage && (
@@ -1130,21 +1590,21 @@ export function AdminDashboardPage() {
       )}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="관리자 주요 지표">
-        {adminKpiStats.map((stat) => (
+        {dashboardKpiStats.map((stat) => (
           <KpiCard key={stat.id} stat={stat} />
         ))}
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.3fr_0.9fr_1.2fr]">
-        <TrendChart />
-        <DonutChart />
-        <SeoulRiskMap points={mapRiskPoints} onMockAction={setMockMessage} />
+        <TrendChart period={period} reports={filteredReports} />
+        <DonutChart items={riskDistribution} />
+        <SeoulRiskMap points={mapRiskPoints} />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.35fr_0.8fr_0.8fr]">
         <PriorityTable areas={priorityAreas} selectedTab={selectedPriorityTab} onTabChange={setSelectedPriorityTab} />
         <RepairAssignmentCard onAssigned={setMockMessage} />
-        <StatusSummary onMockAction={setMockMessage} />
+        <StatusSummary items={statusSummary} lastUpdated={lastUpdated} onRefresh={refreshDashboard} />
       </section>
     </div>
   )

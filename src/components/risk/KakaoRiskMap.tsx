@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { X } from 'lucide-react'
 import type { RiskGridResult } from '../../types/risk'
@@ -33,10 +34,14 @@ const SEOUL_CENTER = {
   lng: 126.978,
 }
 
+const MAX_VISIBLE_MARKERS = 40
+const FALLBACK_VISIBLE_MARKERS = 20
+const MIN_PRIORITY_RISK_SCORE = 20
+
 const riskToneClasses: Record<RiskMarkerTone, string> = {
   red: 'bg-red-600 text-white shadow-red-500/35',
   orange: 'bg-orange-500 text-white shadow-orange-500/35',
-  yellow: 'bg-yellow-400 text-slate-950 shadow-yellow-400/35',
+  yellow: 'bg-yellow-500 text-slate-950 shadow-yellow-500/35',
   green: 'bg-green-500 text-white shadow-green-500/35',
   gray: 'bg-slate-500 text-white shadow-slate-500/30',
 }
@@ -48,6 +53,14 @@ const riskLabelByTone: Record<RiskMarkerTone, string> = {
   green: '안전',
   gray: '미확인',
 }
+
+const riskLegendItems: { label: string; range: string; tone: RiskMarkerTone }[] = [
+  { label: '안전', range: '0~20%', tone: 'green' },
+  { label: '관심', range: '20~40%', tone: 'yellow' },
+  { label: '주의', range: '40~70%', tone: 'orange' },
+  { label: '위험', range: '70% 이상', tone: 'red' },
+  { label: '미확인', range: '데이터 없음', tone: 'gray' },
+]
 
 function getNumberField(result: RiskGridResult, keys: string[]) {
   for (const key of keys) {
@@ -73,9 +86,14 @@ function getStringField(result: RiskGridResult, keys: string[]) {
   return undefined
 }
 
-function getRiskTone(result: RiskGridResult): RiskMarkerTone {
-  const rawLevel = getStringField(result, ['riskLevel', 'riskGrade', 'grade', 'level'])
+function getGridCenter(result: RiskGridResult) {
+  const centerLat = getNumberField(result, ['centerLat', 'latitude', 'lat'])
+  const centerLng = getNumberField(result, ['centerLng', 'longitude', 'lng'])
 
+  return centerLat !== undefined && centerLng !== undefined ? { lat: centerLat, lng: centerLng } : undefined
+}
+
+function getRiskToneFromValues(rawLevel: string | undefined, riskScore: number | undefined): RiskMarkerTone {
   if (rawLevel === '위험') {
     return 'red'
   }
@@ -92,7 +110,29 @@ function getRiskTone(result: RiskGridResult): RiskMarkerTone {
     return 'green'
   }
 
+  if (riskScore !== undefined) {
+    if (riskScore >= 70) {
+      return 'red'
+    }
+
+    if (riskScore >= 40) {
+      return 'orange'
+    }
+
+    if (riskScore >= 20) {
+      return 'yellow'
+    }
+
+    return 'green'
+  }
+
   return 'gray'
+}
+
+function getRiskTone(result: RiskGridResult): RiskMarkerTone {
+  const rawLevel = getStringField(result, ['riskLevel', 'riskGrade', 'grade', 'level'])
+  const riskScore = getNumberField(result, ['riskScore', 'score', 'riskPercent', 'value'])
+  return getRiskToneFromValues(rawLevel, riskScore)
 }
 
 function getDisplayRiskLevel(result: RiskGridResult) {
@@ -101,12 +141,11 @@ function getDisplayRiskLevel(result: RiskGridResult) {
 }
 
 function buildMarkers(results: RiskGridResult[]) {
-  return results
+  const markers = results
     .map((result, index): RiskMarker | undefined => {
-      const centerLat = getNumberField(result, ['centerLat'])
-      const centerLng = getNumberField(result, ['centerLng'])
+      const center = getGridCenter(result)
 
-      if (centerLat === undefined || centerLng === undefined) {
+      if (!center) {
         return undefined
       }
 
@@ -118,10 +157,7 @@ function buildMarkers(results: RiskGridResult[]) {
         gridCode,
         id: gridCode ?? `risk-marker-${index}`,
         label: districtName ?? gridCode ?? `위험 격자 ${index + 1}`,
-        position: {
-          lat: centerLat,
-          lng: centerLng,
-        },
+        position: center,
         result,
         riskLevelLabel: getDisplayRiskLevel(result),
         riskScore: getNumberField(result, ['riskScore']),
@@ -129,6 +165,17 @@ function buildMarkers(results: RiskGridResult[]) {
       }
     })
     .filter((marker): marker is RiskMarker => marker !== undefined)
+    .sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0))
+
+  const priorityMarkers = markers.filter((marker) => (marker.riskScore ?? 0) >= MIN_PRIORITY_RISK_SCORE)
+
+  if (priorityMarkers.length > 0) {
+    return priorityMarkers.slice(0, MAX_VISIBLE_MARKERS)
+  }
+
+  return markers
+    .filter((marker) => (marker.riskScore ?? 0) > 0)
+    .slice(0, FALLBACK_VISIBLE_MARKERS)
 }
 
 function formatValue(value: number | string | undefined) {
@@ -232,7 +279,7 @@ export function KakaoRiskMap({
   const [isLoading, error] = useKakaoLoader({
     appkey: kakaoJavaScriptKey,
   })
-  const markers = buildMarkers(gridResults)
+  const markers = useMemo(() => buildMarkers(gridResults), [gridResults])
 
   if (!kakaoJavaScriptKey) {
     return (
@@ -261,6 +308,7 @@ export function KakaoRiskMap({
       >
         {markers.map((marker) => {
           const isSelected = marker.gridCode !== undefined && marker.gridCode === activeGridCode
+          const markerValue = marker.riskScore === undefined ? marker.riskLevelLabel : Math.round(marker.riskScore)
 
           return (
             <CustomOverlayMap
@@ -278,15 +326,12 @@ export function KakaoRiskMap({
               >
                 <span
                   className={cn(
-                    'flex h-9 min-w-9 items-center justify-center rounded-full border-[3px] border-white px-2 text-[11px] font-black shadow-xl',
+                    'flex h-10 min-w-10 items-center justify-center rounded-full border-[3px] border-white px-2 text-[12px] font-black shadow-xl sm:h-11 sm:min-w-11 sm:text-[13px]',
                     riskToneClasses[marker.tone],
                     isSelected && 'ring-4 ring-blue-200',
                   )}
                 >
-                  {marker.riskScore === undefined ? marker.riskLevelLabel : Math.round(marker.riskScore)}
-                </span>
-                <span className="mt-1 max-w-[92px] truncate rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-black text-slate-700 shadow-sm">
-                  {marker.label}
+                  {markerValue}
                 </span>
               </button>
             </CustomOverlayMap>
@@ -302,17 +347,18 @@ export function KakaoRiskMap({
         </div>
       )}
 
+      {!isLoading && markers.length === 0 && (
+        <div className="absolute left-4 top-4 z-20 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 text-[12px] font-bold text-slate-600 shadow-sm">
+          표시할 위험 격자가 없습니다.
+        </div>
+      )}
+
       <div className="absolute bottom-5 right-4 z-20 grid min-w-[250px] grid-cols-5 gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:right-6">
-        {([
-          ['green', '안전'],
-          ['yellow', '관심'],
-          ['orange', '주의'],
-          ['red', '위험'],
-          ['gray', '미확인'],
-        ] as const).map(([tone, label]) => (
-          <div key={tone} className="text-center">
-            <span className={cn('mx-auto block h-3 w-3 rounded-full', riskToneClasses[tone].split(' ')[0])} />
-            <span className="mt-1 block text-[10px] font-black text-slate-700">{label}</span>
+        {riskLegendItems.map((item) => (
+          <div key={item.tone} className="text-center">
+            <span className={cn('mx-auto block h-3 w-3 rounded-full', riskToneClasses[item.tone].split(' ')[0])} />
+            <span className="mt-1 block text-[10px] font-black text-slate-700">{item.label}</span>
+            <span className="mt-0.5 block text-[9px] font-bold text-slate-500">{item.range}</span>
           </div>
         ))}
       </div>

@@ -9,11 +9,8 @@ import {
   FileCheck2,
   Info,
   Landmark,
-  LocateFixed,
-  MapPin,
   Maximize2,
   Megaphone,
-  Minus,
   Phone,
   Plus,
   X,
@@ -27,7 +24,9 @@ import {
   submitClaim,
   uploadClaimAttachment,
 } from '../api/claimApi'
+import { getApiBaseUrl } from '../api/apiClient'
 import { getCitizenReport, SEOUL_FALLBACK_COORDINATES } from '../api/reportApi'
+import { KakaoAgencyMap } from '../components/agency/KakaoAgencyMap'
 import {
   accidentInfo,
   agencyContacts,
@@ -35,7 +34,6 @@ import {
   claimChecklistItems,
   claimDocumentPreview,
   compensationSteps,
-  evidencePhotos,
   vehicleInfo,
 } from '../data/mockData'
 import type { AgencyContact, AgencyInfo, ClaimChecklistItem, EvidencePhoto } from '../types'
@@ -44,6 +42,11 @@ import type { CitizenReportResponse } from '../types/report'
 import { cn } from '../utils/cn'
 
 type ModeKey = 'agency' | 'claim'
+
+type LocationCoordinates = {
+  lat: number
+  lng: number
+}
 
 type AssetImageProps = {
   sources: string[]
@@ -101,18 +104,6 @@ function ModeCard({
         <span className="mt-1 block text-[13px] font-semibold leading-5 text-slate-500">{description}</span>
       </span>
     </button>
-  )
-}
-
-function MapFallback() {
-  return (
-    <div role="img" aria-label="사고 위치 지도 미리보기" className="relative h-full w-full overflow-hidden bg-slate-100">
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(148,163,184,0.18)_1px,transparent_1px),linear-gradient(rgba(148,163,184,0.18)_1px,transparent_1px)] bg-[size:34px_34px]" />
-      <div className="absolute left-[-45px] top-10 h-12 w-[560px] rotate-[-22deg] rounded-full bg-blue-100 shadow-[0_0_0_10px_rgba(255,255,255,0.65)]" />
-      <div className="absolute left-[-35px] top-[138px] h-14 w-[570px] rotate-[17deg] rounded-full bg-slate-200 shadow-[0_0_0_10px_rgba(255,255,255,0.6)]" />
-      <div className="absolute left-[60px] top-[-55px] h-[420px] w-8 rotate-[23deg] rounded-full bg-blue-100 shadow-[0_0_0_8px_rgba(255,255,255,0.5)]" />
-      <div className="absolute right-[-30px] top-3 h-[330px] w-[95px] rotate-[15deg] bg-green-200/80" />
-    </div>
   )
 }
 
@@ -238,7 +229,43 @@ function firstText(...values: Array<string | null | undefined>) {
   return values.find((value) => typeof value === 'string' && value.trim())?.trim()
 }
 
-function getReportCoordinates(report: CitizenReportResponse | null) {
+function formatCoordinate(value: number) {
+  return value.toFixed(6)
+}
+
+function formatDisplayDateTime(value: string | null | undefined) {
+  if (!value) {
+    return undefined
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+function getHazardLabel(value: string | null | undefined) {
+  const labels: Record<string, string> = {
+    CRACK: '도로 균열',
+    FALLING_OBJECT: '낙하물',
+    OTHER: '기타 도로 위험',
+    POTHOLE: '포트홀',
+    SUBSIDENCE: '도로 침하',
+  }
+
+  return value ? labels[value] ?? value : undefined
+}
+
+function getReportCoordinates(report: CitizenReportResponse | null): LocationCoordinates {
   if (typeof report?.latitude === 'number' && Number.isFinite(report.latitude) && typeof report.longitude === 'number' && Number.isFinite(report.longitude)) {
     return {
       lat: report.latitude,
@@ -252,11 +279,45 @@ function getReportCoordinates(report: CitizenReportResponse | null) {
   }
 }
 
-function getAgencyDisplay(agencyInfo: AgencyInfo | null, claim: ClaimResponse | null, report: CitizenReportResponse | null) {
+function getReportEvidencePhotos(report: CitizenReportResponse | null): EvidencePhoto[] {
+  if (!report?.imageUrl) {
+    return []
+  }
+
+  const imageUrl = resolveBackendAssetUrl(report.imageUrl)
+
+  return [
+    {
+      alt: '신고 사진',
+      fallbackImageUrl: '',
+      fallbackType: 'road',
+      id: 'report-evidence-photo',
+      imageUrl,
+      title: '신고 사진',
+    },
+  ]
+}
+
+function resolveBackendAssetUrl(url: string) {
+  const trimmedUrl = url.trim()
+
+  if (!trimmedUrl || /^blob:|^data:|^https?:\/\//.test(trimmedUrl)) {
+    return trimmedUrl
+  }
+
+  const normalizedPath = trimmedUrl.startsWith('/') ? trimmedUrl : `/${trimmedUrl}`
+  return `${getApiBaseUrl()}${normalizedPath}`
+}
+
+function getAgencyDisplay(agencyInfo: AgencyInfo | null, claim: ClaimResponse | null, report: CitizenReportResponse | null, coordinates: LocationCoordinates) {
   const primaryDepartment = agencyInfo?.departments?.[0]
-  const roadAddress = firstText(report?.address, agencyInfo?.roadName, agencyInfo?.address, agencyLookupResult.roadAddress) ?? agencyLookupResult.roadAddress
-  const detailAddress = firstText(report?.locationDetail, agencyInfo?.address, agencyLookupResult.lotAddress) ?? agencyLookupResult.lotAddress
-  const districtName = firstText(agencyInfo?.districtName, agencyLookupResult.districtOffice)
+  const province = firstText(agencyInfo?.sido, agencyLookupResult.province) ?? agencyLookupResult.province
+  const districtName = firstText(agencyInfo?.districtName)
+  const districtOffice = firstText(agencyInfo?.agencyName, districtName?.endsWith('청') ? districtName : districtName ? `${districtName}청` : undefined, agencyLookupResult.districtOffice) ?? agencyLookupResult.districtOffice
+  const coordinateLabel = `위도 ${formatCoordinate(coordinates.lat)}, 경도 ${formatCoordinate(coordinates.lng)}`
+  const districtAddress = [province, districtName].filter(Boolean).join(' ')
+  const roadAddress = firstText(report?.address, agencyInfo?.roadName, agencyInfo?.address, districtAddress, agencyLookupResult.roadAddress) ?? agencyLookupResult.roadAddress
+  const detailAddress = firstText(report?.locationDetail, agencyInfo?.address, coordinateLabel) ?? coordinateLabel
   const managingAuthority =
     firstText(claim?.managingAuthority, agencyInfo?.agencyName, agencyInfo?.managingAuthority, primaryDepartment?.departmentName, agencyInfo?.departmentName, agencyLookupResult.roadManagementAgency) ??
     agencyLookupResult.roadManagementAgency
@@ -264,9 +325,27 @@ function getAgencyDisplay(agencyInfo: AgencyInfo | null, claim: ClaimResponse | 
   return {
     roadAddress,
     lotAddress: detailAddress,
-    province: firstText(agencyInfo?.sido, agencyLookupResult.province) ?? agencyLookupResult.province,
-    districtOffice: districtName?.endsWith('청') ? districtName : `${districtName ?? '관할 구'}청`,
+    province,
+    districtOffice,
     roadManagementAgency: managingAuthority,
+  }
+}
+
+function getIncidentDisplay(
+  agencyDisplay: ReturnType<typeof getAgencyDisplay>,
+  claim: ClaimResponse | null,
+  coordinates: LocationCoordinates,
+  damageDescription: string,
+  incidentAt: string,
+  incidentType: string,
+  report: CitizenReportResponse | null,
+) {
+  return {
+    accidentDescription: firstText(claim?.damageDescription, report?.description, damageDescription) ?? '피해 내용을 입력해 주세요.',
+    accidentType: firstText(claim?.incidentType, getHazardLabel(report?.hazardType), incidentType) ?? '사고 유형을 입력해 주세요.',
+    location: firstText(claim?.incidentAddress, report?.address, agencyDisplay.roadAddress) ?? `위도 ${formatCoordinate(coordinates.lat)}, 경도 ${formatCoordinate(coordinates.lng)}`,
+    lotAddress: firstText(claim?.incidentLocationDetail, report?.locationDetail, agencyDisplay.lotAddress),
+    occurredAt: formatDisplayDateTime(claim?.incidentAt ?? report?.submittedAt ?? incidentAt) ?? '사고 일시를 입력해 주세요.',
   }
 }
 
@@ -311,11 +390,15 @@ export function AgencyCompensationPage() {
   const [searchParams] = useSearchParams()
   const reportId = searchParams.get('reportId') ?? ''
   const [activeMode, setActiveMode] = useState<ModeKey>('agency')
-  const [photos, setPhotos] = useState(evidencePhotos)
+  const [photos, setPhotos] = useState<EvidencePhoto[]>([])
   const [documentPage, setDocumentPage] = useState(claimDocumentPreview.currentPage)
   const [notice, setNotice] = useState('')
   const [claim, setClaim] = useState<ClaimResponse | null>(null)
   const [linkedReport, setLinkedReport] = useState<CitizenReportResponse | null>(null)
+  const [selectedCoordinates, setSelectedCoordinates] = useState<LocationCoordinates>({
+    lat: SEOUL_FALLBACK_COORDINATES.latitude,
+    lng: SEOUL_FALLBACK_COORDINATES.longitude,
+  })
   const [agencyInfo, setAgencyInfo] = useState<AgencyInfo | null>(null)
   const [isAgencyLoading, setIsAgencyLoading] = useState(true)
   const [agencyNotice, setAgencyNotice] = useState('')
@@ -339,8 +422,46 @@ export function AgencyCompensationPage() {
   const isDraftClaim = !claim || claim.status === 'DRAFT'
   const displayChecklistItems = getChecklistItems(claim?.checklist)
   const displayClaimStatus = claim?.status ? claimStatusLabels[claim.status] ?? claim.status : '초안 생성 전'
-  const agencyDisplay = getAgencyDisplay(agencyInfo, claim, linkedReport)
+  const agencyDisplay = getAgencyDisplay(agencyInfo, claim, linkedReport, selectedCoordinates)
   const displayAgencyContacts = getDisplayAgencyContacts(agencyInfo)
+  const incidentDisplay = getIncidentDisplay(agencyDisplay, claim, selectedCoordinates, damageDescription, incidentAt, incidentType, linkedReport)
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadLinkedReport() {
+      if (reportId) {
+        try {
+          const report = await getCitizenReport(reportId)
+
+          if (!ignore) {
+            setLinkedReport(report)
+            setPhotos(getReportEvidencePhotos(report))
+            setSelectedCoordinates(getReportCoordinates(report))
+          }
+        } catch {
+          if (!ignore) {
+            setLinkedReport(null)
+            setPhotos([])
+            setSelectedCoordinates(getReportCoordinates(null))
+            setNotice('신고 정보를 불러오지 못했습니다. 지도에서 위치를 선택해 관할기관을 조회할 수 있습니다.')
+          }
+        }
+
+        return
+      }
+
+      setLinkedReport(null)
+      setPhotos([])
+      setSelectedCoordinates(getReportCoordinates(null))
+    }
+
+    void loadLinkedReport()
+
+    return () => {
+      ignore = true
+    }
+  }, [reportId])
 
   useEffect(() => {
     let ignore = false
@@ -349,26 +470,8 @@ export function AgencyCompensationPage() {
       setIsAgencyLoading(true)
       setAgencyNotice('')
 
-      let report: CitizenReportResponse | null = null
-
-      if (reportId) {
-        try {
-          report = await getCitizenReport(reportId)
-
-          if (!ignore) {
-            setLinkedReport(report)
-          }
-        } catch {
-          if (!ignore) {
-            setLinkedReport(null)
-          }
-        }
-      }
-
-      const coordinates = getReportCoordinates(report)
-
       try {
-        const agency = await getAgencyByLocation(coordinates.lat, coordinates.lng)
+        const agency = await getAgencyByLocation(selectedCoordinates.lat, selectedCoordinates.lng)
 
         if (!ignore) {
           setAgencyInfo(agency)
@@ -379,7 +482,7 @@ export function AgencyCompensationPage() {
 
         if (!ignore) {
           setAgencyInfo(null)
-          setAgencyNotice(`관할기관 API 연결에 실패해 데모 데이터를 표시합니다. (${message})`)
+          setAgencyNotice(`관할기관 API 연결에 실패했습니다. 현재 선택 좌표 기준 정보만 표시합니다. (${message})`)
         }
       } finally {
         if (!ignore) {
@@ -393,7 +496,7 @@ export function AgencyCompensationPage() {
     return () => {
       ignore = true
     }
-  }, [reportId])
+  }, [selectedCoordinates.lat, selectedCoordinates.lng])
 
   const vehicleFields = [
     { label: '차량 번호', value: claim?.vehiclePlateNumber ?? vehiclePlateNumber },
@@ -584,32 +687,17 @@ export function AgencyCompensationPage() {
       </div>
 
       <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_14px_35px_rgba(15,40,70,0.06)]">
-        <div className="grid gap-5 xl:grid-cols-[minmax(360px,0.92fr)_minmax(0,1.08fr)]">
+        <div className={cn('grid gap-5', activeMode === 'agency' && 'xl:grid-cols-[minmax(360px,0.92fr)_minmax(0,1.08fr)]')}>
           <div className="min-w-0">
             <div className="relative h-[285px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-              <AssetImage
-                sources={[agencyLookupResult.mapImageUrl, agencyLookupResult.fallbackMapImageUrl]}
-                alt="사고 위치 지도 미리보기"
-                className="h-full w-full object-cover"
-                fallback={<MapFallback />}
+              <KakaoAgencyMap
+                addressLabel={agencyDisplay.roadAddress}
+                agencyName={agencyDisplay.roadManagementAgency}
+                detailLabel={agencyDisplay.lotAddress}
+                isLoading={isAgencyLoading}
+                onSelectLocation={setSelectedCoordinates}
+                position={selectedCoordinates}
               />
-              <div className="absolute left-4 top-4 max-w-[250px] rounded-xl bg-white/92 p-4 shadow-[0_10px_24px_rgba(15,40,70,0.12)] backdrop-blur">
-                <p className="text-[13px] font-black text-blue-700">선택 위치</p>
-                <p className="mt-2 text-[12px] font-black leading-5 text-slate-700">{agencyDisplay.roadAddress}</p>
-                <p className="mt-1 text-[12px] font-bold text-slate-600">{agencyDisplay.lotAddress}</p>
-              </div>
-              <MapPin className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-[35%] text-blue-700 drop-shadow-[0_8px_14px_rgba(0,95,220,0.28)]" size={58} fill="#0B6DDE" aria-hidden="true" />
-              <div className="absolute right-3 top-[116px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-md">
-                <button type="button" aria-label="지도 확대" className="flex h-10 w-10 items-center justify-center border-b border-slate-200 text-slate-700 transition hover:bg-blue-50">
-                  <Plus size={18} aria-hidden="true" />
-                </button>
-                <button type="button" aria-label="지도 축소" className="flex h-10 w-10 items-center justify-center text-slate-700 transition hover:bg-blue-50">
-                  <Minus size={18} aria-hidden="true" />
-                </button>
-              </div>
-              <button type="button" aria-label="현재 위치 보기" className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-md transition hover:bg-blue-50">
-                <LocateFixed size={18} aria-hidden="true" />
-              </button>
             </div>
 
             <div className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 px-4 py-3 text-[12px] font-bold leading-5 text-slate-500">
@@ -625,6 +713,7 @@ export function AgencyCompensationPage() {
             )}
           </div>
 
+          {activeMode === 'agency' && (
           <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex items-center gap-2">
               <CheckCircle2 size={24} className="text-green-600" fill="#22C55E" aria-hidden="true" />
@@ -692,9 +781,12 @@ export function AgencyCompensationPage() {
               ))}
             </div>
           </div>
+          )}
         </div>
       </section>
 
+      {activeMode === 'claim' && (
+      <>
       <div className="mt-5 flex flex-col gap-4 min-[1100px]:flex-row min-[1100px]:items-center min-[1100px]:justify-between">
         <div className="flex items-start gap-3">
           <Megaphone size={24} className="mt-1 shrink-0 text-slate-700" aria-hidden="true" />
@@ -735,10 +827,10 @@ export function AgencyCompensationPage() {
             </button>
           </div>
           {[
-            { label: '사고 일시', value: accidentInfo.occurredAt },
-            { label: '사고 위치', value: accidentInfo.location, subValue: accidentInfo.lotAddress },
-            { label: '사고 유형', value: accidentInfo.accidentType },
-            { label: '사고 경위', value: accidentInfo.accidentDescription },
+            { label: '사고 일시', value: incidentDisplay.occurredAt },
+            { label: '사고 위치', value: incidentDisplay.location, subValue: incidentDisplay.lotAddress },
+            { label: '사고 유형', value: incidentDisplay.accidentType },
+            { label: '사고 경위', value: incidentDisplay.accidentDescription },
           ].map((item) => (
             <div key={item.label} className="mb-4 last:mb-0">
               <p className="text-[12px] font-black text-slate-400">{item.label}</p>
@@ -776,7 +868,7 @@ export function AgencyCompensationPage() {
 
           {photos.length === 0 && (
             <p className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-[12px] font-bold text-slate-500">
-              첨부 사진은 데모 화면에서만 변경됩니다.
+              신고 사진이 연결되지 않았습니다. 아래 첨부 파일 영역에서 제출 서류를 업로드할 수 있습니다.
             </p>
           )}
 
@@ -817,7 +909,7 @@ export function AgencyCompensationPage() {
               <div>
                 <p className="text-[12px] font-black text-blue-700">백엔드 청구 연동</p>
                 <p className="mt-1 text-[12px] font-semibold text-slate-600">
-                  {reportId ? `연결된 신고 번호: ${reportId}` : '신고 번호가 없어 데모 정보로 표시 중입니다.'}
+                  {reportId ? `연결된 신고 번호: ${reportId}` : '신고 번호가 없어 청구 초안 생성은 비활성화됩니다.'}
                 </p>
               </div>
               {claimId && (
@@ -1121,7 +1213,7 @@ export function AgencyCompensationPage() {
             <button type="button" onClick={() => setDocumentPage((page) => Math.min(claimDocumentPreview.totalPage, page + 1))} disabled={documentPage === claimDocumentPreview.totalPage} aria-label="다음 청구서 미리보기 페이지" className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 transition hover:bg-blue-50 disabled:opacity-40">
               <ChevronRight size={16} aria-hidden="true" />
             </button>
-            <button type="button" onClick={() => setNotice('문서 확대 보기는 데모 화면입니다.')} aria-label="청구서 미리보기 확대" className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 transition hover:bg-blue-50">
+            <button type="button" onClick={() => setNotice('문서 확대 보기는 아직 지원하지 않습니다.')} aria-label="청구서 미리보기 확대" className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 transition hover:bg-blue-50">
               <Maximize2 size={15} aria-hidden="true" />
             </button>
           </div>
@@ -1155,8 +1247,10 @@ export function AgencyCompensationPage() {
 
       <div className="mt-3 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-[12px] font-semibold leading-5 text-blue-700">
         <Building2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-        관할기관 안내 정보는 백엔드 조회 결과를 우선 사용하며, API 연결 실패 시 데모 데이터를 함께 표시합니다.
+        관할기관 안내 정보는 백엔드 조회 결과를 기준으로 표시하며, 청구 초안 생성과 제출은 연결된 신고 번호가 있을 때 진행됩니다.
       </div>
+      </>
+      )}
     </div>
   )
 }
