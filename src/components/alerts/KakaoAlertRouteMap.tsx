@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ChevronRight, LocateFixed, MapPin, ShieldCheck, Siren } from 'lucide-react'
 import { Circle, CustomOverlayMap, Map, Polyline, ZoomControl, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { getDrivingRoute } from '../../api/routeApi'
+import { interactiveKakaoMapOptions } from '../../constants/kakaoMapOptions'
 import type { AlertRiskLevel, RoutePreview } from '../../types'
 import { cn } from '../../utils/cn'
 
@@ -223,13 +224,14 @@ export function KakaoAlertRouteMap({
     <section className="relative mt-4 h-[260px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_16px_40px_rgba(15,40,70,0.08)] sm:h-[270px] lg:h-[270px]">
       <Map
         center={route.danger}
-        className="h-full w-full"
+        className="kakao-map-root h-full w-full"
         isPanto
         level={5}
         onCreate={(map) => {
           mapRef.current = map
         }}
         style={{ height: '100%', width: '100%' }}
+        {...interactiveKakaoMapOptions}
       >
         <Polyline
           endArrow

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { X } from 'lucide-react'
+import { interactiveKakaoMapOptions } from '../../constants/kakaoMapOptions'
 import type { RiskGridResult } from '../../types/risk'
 import { cn } from '../../utils/cn'
 
@@ -301,10 +302,11 @@ export function KakaoRiskMap({
     <section className="relative h-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_18px_45px_rgba(15,40,70,0.08)] sm:h-[500px] xl:h-[560px]">
       <Map
         center={SEOUL_CENTER}
-        className="h-full w-full"
+        className="kakao-map-root h-full w-full"
         isPanto
         level={7}
         style={{ height: '100%', width: '100%' }}
+        {...interactiveKakaoMapOptions}
       >
         {markers.map((marker) => {
           const isSelected = marker.gridCode !== undefined && marker.gridCode === activeGridCode

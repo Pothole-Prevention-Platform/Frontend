@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Landmark, LocateFixed, MapPin, Minus, Plus } from 'lucide-react'
 import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
+import { interactiveKakaoMapOptions } from '../../constants/kakaoMapOptions'
 
 type AgencyMapPosition = {
   lat: number
@@ -95,7 +96,7 @@ export function KakaoAgencyMap({
     <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-slate-100">
       <Map
         center={position}
-        className="h-full w-full"
+        className="kakao-map-root h-full w-full"
         level={4}
         onClick={(_, mouseEvent) => {
           onSelectLocation({
@@ -110,6 +111,7 @@ export function KakaoAgencyMap({
             map.setCenter(new kakao.maps.LatLng(position.lat, position.lng))
           }, 0)
         }}
+        {...interactiveKakaoMapOptions}
       >
         <CustomOverlayMap position={position} yAnchor={1}>
           <div className="flex flex-col items-center">

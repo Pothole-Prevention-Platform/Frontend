@@ -77,6 +77,11 @@ textarea:focus-visible {
   background-size: 44px 44px;
 }
 
+.kakao-map-root img,
+.kakao-map-root svg {
+  max-width: none;
+}
+
 .road-line {
   position: absolute;
   height: 7px;

@@ -13,6 +13,7 @@ import {
 import { CustomOverlayMap, Map as KakaoMap, ZoomControl, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { getCitizenReports } from '../api/reportApi'
 import { getDistrictRiskRanking, getRiskZones } from '../api/riskApi'
+import { interactiveKakaoMapOptions } from '../constants/kakaoMapOptions'
 import {
   adminFilters,
   adminMapRiskPoints,
@@ -1098,7 +1099,7 @@ function SeoulRiskMap({ points }: { points: AdminMapRiskPoint[] }) {
             카카오 지도를 불러오지 못했습니다. JavaScript 키와 도메인 설정을 확인해 주세요.
           </div>
         ) : (
-          <KakaoMap center={SEOUL_CENTER} className="h-full w-full" level={8}>
+          <KakaoMap center={SEOUL_CENTER} className="kakao-map-root h-full w-full" level={8} {...interactiveKakaoMapOptions}>
             <ZoomControl position="RIGHT" />
             {(scope === '주의 이상' ? positionedPoints.filter((point) => point.value >= 45) : positionedPoints).map((point) => {
               const style = mapRiskStyles[point.level]
