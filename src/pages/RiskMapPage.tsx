@@ -15,7 +15,7 @@ import {
 import { getCitizenReports } from '../api/reportApi'
 import { getGridRiskResult, getLatestGridRiskResults, getRiskZones } from '../api/riskApi'
 import { KakaoRiskMap } from '../components/risk/KakaoRiskMap'
-import { riskHighZones, riskLegend, riskMapFilters, riskMapStats } from '../data/mockData'
+import { riskLegend, riskMapFilters } from '../data/mockData'
 import type { RiskGridResult, RiskMapFilterId, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem, RiskMapStats } from '../types'
 import { cn } from '../utils/cn'
 
@@ -28,7 +28,8 @@ const defaultFilterValues: Record<RiskMapFilterId, string> = {
   undergroundConstruction: '전체',
 }
 
-const LOCAL_RISK_FALLBACK_NOTICE = '현재 로컬 위험도 계산 결과가 없어 예시 데이터를 표시하고 있습니다.'
+const RISK_EMPTY_NOTICE = '표시할 실제 위험도 데이터가 없습니다. 위험도 산출 후 다시 확인해 주세요.'
+const RISK_COORDINATE_NOTICE = '실제 위험도 데이터에 지도 좌표가 없어 목록만 표시합니다.'
 
 const filterIcons: Record<RiskMapFilterId, ReactNode> = {
   rainfall: <CloudRain size={22} aria-hidden="true" />,
@@ -62,73 +63,6 @@ const legendDotClasses: Record<RiskMapLegendItem['color'], string> = {
   yellow: 'bg-yellow-400',
   orange: 'bg-orange-500',
   red: 'bg-red-600',
-}
-
-const fallbackRiskGridResults: RiskGridResult[] = [
-  {
-    id: 9001,
-    gridCode: 'MOCK-GN-001',
-    districtName: '강남구',
-    centerLat: 37.501274,
-    centerLng: 127.039585,
-    riskScore: 83,
-    riskLevel: '위험',
-    rainfallScore: 78,
-    trafficScore: 82,
-    sewerScore: 64,
-    excavationScore: 48,
-    temperatureScore: 10,
-    calculatedAt: '2026-05-21T21:40:42',
-  },
-  {
-    id: 9002,
-    gridCode: 'MOCK-JR-002',
-    districtName: '종로구',
-    centerLat: 37.582604,
-    centerLng: 126.997901,
-    riskScore: 62,
-    riskLevel: '주의',
-    rainfallScore: 58,
-    trafficScore: 43,
-    sewerScore: 71,
-    excavationScore: 20,
-    temperatureScore: 8,
-    calculatedAt: '2026-05-21T21:40:42',
-  },
-  {
-    id: 9003,
-    gridCode: 'MOCK-MP-003',
-    districtName: '마포구',
-    centerLat: 37.55684,
-    centerLng: 126.92362,
-    riskScore: 36,
-    riskLevel: '관심',
-    rainfallScore: 31,
-    trafficScore: 28,
-    sewerScore: 44,
-    excavationScore: 19,
-    temperatureScore: 7,
-    calculatedAt: '2026-05-21T21:40:42',
-  },
-  {
-    id: 9004,
-    gridCode: 'MOCK-SC-004',
-    districtName: '서초구',
-    centerLat: 37.5048,
-    centerLng: 127.0049,
-    riskScore: 12,
-    riskLevel: '안전',
-    rainfallScore: 8,
-    trafficScore: 12,
-    sewerScore: 15,
-    excavationScore: 5,
-    temperatureScore: 6,
-    calculatedAt: '2026-05-21T21:40:42',
-  },
-]
-
-function isFallbackRiskGrid(result: RiskGridResult) {
-  return getStringField(result, ['gridCode', 'gridId'])?.startsWith('MOCK-') ?? false
 }
 
 function clampPercent(value: number) {
@@ -306,7 +240,9 @@ function toRiskMapHighZone(result: RiskGridResult, index: number): RiskMapHighZo
   }
 }
 
-function buildRiskMapStats(results: RiskGridResult[], recentReportCount?: number): RiskMapStats {
+type RiskMapStatsView = Partial<RiskMapStats>
+
+function buildRiskMapStats(results: RiskGridResult[], recentReportCount?: number): RiskMapStatsView {
   const highRiskGrades = new Set<RiskMapHighZoneGrade>(['긴급', '매우 높음', '위험', '높음'])
   const highRiskCount = results.filter((result) => {
     const riskPercent = normalizeRiskScore(result)
@@ -314,10 +250,8 @@ function buildRiskMapStats(results: RiskGridResult[], recentReportCount?: number
   }).length
 
   return {
-    ...riskMapStats,
     highRiskCount,
-    recentReportCount: recentReportCount ?? riskMapStats.recentReportCount,
-    highRiskDelta: Math.max(0, highRiskCount - riskMapStats.highRiskCount),
+    recentReportCount,
   }
 }
 
@@ -466,32 +400,40 @@ function RiskLegendCard() {
   )
 }
 
-function RiskSummaryPanel({ stats }: { stats: RiskMapStats }) {
+function formatStatValue(value: number | undefined, fractionDigits = 0) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '-'
+  }
+
+  return fractionDigits > 0 ? value.toFixed(fractionDigits) : String(value)
+}
+
+function RiskSummaryPanel({ stats }: { stats: RiskMapStatsView | null }) {
   return (
     <aside className="grid gap-3 sm:grid-cols-2 xl:h-[560px] xl:grid-cols-1 xl:grid-rows-[132px_132px_132px_minmax(0,1fr)]">
       <StatSummaryCard
         title="오늘의 고위험 구간"
-        value={String(stats.highRiskCount)}
+        value={formatStatValue(stats?.highRiskCount)}
         unit="개 구간"
-        change={`▲ ${stats.highRiskDelta}`}
+        change="실제 데이터 기준"
         color="red"
         icon={<Siren size={44} fill="currentColor" aria-hidden="true" />}
       />
       <StatSummaryCard
         title="최근 신고 수"
         caption="(최근 7일)"
-        value={String(stats.recentReportCount)}
+        value={formatStatValue(stats?.recentReportCount)}
         unit="건"
-        change={`▲ ${stats.reportDeltaPercent}%`}
+        change="실제 데이터 기준"
         color="blue"
         icon={<ReportFilePlusIcon />}
       />
       <StatSummaryCard
         title="AI 예측 정확도"
         caption="(최근 30일)"
-        value={stats.aiAccuracy.toFixed(1)}
+        value={formatStatValue(stats?.aiAccuracy, 1)}
         unit="%"
-        change={`▲ ${stats.accuracyDeltaPercent}%p`}
+        change="운영 지표 연동 필요"
         color="teal"
         icon={<Cpu size={44} aria-hidden="true" />}
       />
@@ -576,6 +518,15 @@ function RiskHighZoneMobileCard({ zone }: { zone: RiskMapHighZone }) {
 }
 
 function RiskHighZoneTable({ zones }: { zones: RiskMapHighZone[] }) {
+  if (zones.length === 0) {
+    return (
+      <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-[0_12px_32px_rgba(15,40,70,0.06)]">
+        <h2 className="text-[20px] font-black tracking-[-0.06em] text-[#07182F]">최근 고위험 구간</h2>
+        <p className="mt-3 text-[13px] font-bold text-slate-500">실제 위험 구간 데이터가 없습니다.</p>
+      </section>
+    )
+  }
+
   return (
     <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,40,70,0.06)] sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -642,8 +593,8 @@ function RiskHighZoneTable({ zones }: { zones: RiskMapHighZone[] }) {
 }
 
 export function RiskMapPage() {
-  const [zones, setZones] = useState<RiskMapHighZone[]>(riskHighZones)
-  const [stats, setStats] = useState<RiskMapStats>(riskMapStats)
+  const [zones, setZones] = useState<RiskMapHighZone[]>([])
+  const [stats, setStats] = useState<RiskMapStatsView | null>(null)
   const [gridResults, setGridResults] = useState<RiskGridResult[]>([])
   const [selectedGrid, setSelectedGrid] = useState<RiskGridResult | null>(null)
   const [selectedGridCode, setSelectedGridCode] = useState<string | undefined>()
@@ -674,25 +625,22 @@ export function RiskMapPage() {
       const recentReportCount = reportsResult.status === 'fulfilled' ? reportRows.length : undefined
       const mapRows = latestRows.length > 0 ? latestRows : zoneRows
       const mapCoordinateRows = mapRows.filter(hasMapCoordinates)
-      const displayGridRows = mapCoordinateRows.length > 0 ? mapCoordinateRows : fallbackRiskGridResults
       const zoneSourceRows = zoneRows.length > 0 ? zoneRows : latestRows
       const sortedRiskRows = sortRiskRowsByPriority(zoneSourceRows)
       const apiZones = sortedRiskRows.slice(0, 8).map(toRiskMapHighZone)
 
-      setGridResults(displayGridRows)
+      setGridResults(mapCoordinateRows)
+      setZones(apiZones)
+      setStats(mapRows.length > 0 ? buildRiskMapStats(mapRows, recentReportCount) : null)
+      setSelectedGrid(null)
+      setSelectedGridCode(undefined)
 
-      if (apiZones.length > 0) {
-        setZones(apiZones)
-        setStats(buildRiskMapStats(mapRows, recentReportCount))
-      } else {
-        setZones(riskHighZones)
-        setStats(riskMapStats)
-        setSelectedGrid(null)
-        setSelectedGridCode(undefined)
-      }
-
-      if (mapCoordinateRows.length === 0) {
-        setRiskNotice(LOCAL_RISK_FALLBACK_NOTICE)
+      if (latestResult.status === 'rejected' && zonesResult.status === 'rejected') {
+        setRiskNotice('실제 위험도 API 연결에 실패했습니다. 백엔드 상태를 확인해 주세요.')
+      } else if (mapRows.length === 0) {
+        setRiskNotice(RISK_EMPTY_NOTICE)
+      } else if (mapCoordinateRows.length === 0) {
+        setRiskNotice(RISK_COORDINATE_NOTICE)
       }
 
       setIsRiskLoading(false)
@@ -713,10 +661,6 @@ export function RiskMapPage() {
     setIsGridDetailLoading(false)
 
     if (!gridCode) {
-      return
-    }
-
-    if (isFallbackRiskGrid(result)) {
       return
     }
 

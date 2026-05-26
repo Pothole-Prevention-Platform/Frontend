@@ -16,9 +16,6 @@ import {
 import {
   alertSettings,
   alertToggleSettings,
-  currentDangerAlert,
-  recentDangerAlerts,
-  routePreview,
 } from '../data/mockData'
 import { KakaoAlertRouteMap } from '../components/alerts/KakaoAlertRouteMap'
 import type {
@@ -38,18 +35,11 @@ const dayOptions: AlertSettingDay[] = ['매일', '평일', '주말']
 const timeOptions = ['21:00', '22:00', '23:00', '06:00', '07:00', '08:00']
 
 const ALERT_SETTINGS_STORAGE_KEY = 'pothole-alert-settings-v1'
-const ALERT_FALLBACK_NOTICE = '현재 로컬 위험도 계산 결과가 없어 예시 알림 데이터를 표시하고 있습니다.'
+const ALERT_EMPTY_NOTICE = '표시할 실제 위험 알림 데이터가 없습니다. 위험도 산출 후 다시 확인해 주세요.'
 const SEOUL_CITY_HALL = {
   lat: 37.5665,
   lng: 126.978,
 }
-
-const fallbackAlertCoordinates = [
-  { lat: 37.501274, lng: 127.039585 },
-  { lat: 37.508139, lng: 127.033414 },
-  { lat: 37.52322, lng: 127.03742 },
-  { lat: 37.497952, lng: 127.027619 },
-] as const
 
 const radiusMarks = [
   { value: 100, label: '100m' },
@@ -59,7 +49,7 @@ const radiusMarks = [
   { value: 2000, label: '2km' },
 ] as const
 
-type LiveAlertSource = 'api' | 'fallback'
+type LiveAlertSource = 'api'
 
 type LiveDangerAlert = CurrentDangerAlert & {
   calculatedAt?: string
@@ -398,35 +388,6 @@ function toLiveAlert(result: RiskGridResult, index: number): LiveDangerAlert | u
   }
 }
 
-function toFallbackLiveAlerts() {
-  const currentCoordinate = fallbackAlertCoordinates[0]
-
-  return [
-    {
-      ...currentDangerAlert,
-      centerLat: currentCoordinate.lat,
-      centerLng: currentCoordinate.lng,
-      riskScore: 83,
-      source: 'fallback' as const,
-    },
-    ...recentDangerAlerts
-      .filter((alert) => alert.riskLevel !== 'safe' && alert.title !== currentDangerAlert.title)
-      .map((alert, index) => ({
-        badgeLabel: alert.riskLabel,
-        centerLat: fallbackAlertCoordinates[index + 1]?.lat ?? currentCoordinate.lat,
-        centerLng: fallbackAlertCoordinates[index + 1]?.lng ?? currentCoordinate.lng,
-        direction: alert.detail.split('|')[1]?.trim() ?? '진행 경로 인근',
-        distanceMeters: Number.parseInt(alert.distanceText.replace(/[^\d]/g, ''), 10) || (index + 2) * 120,
-        id: `fallback-${alert.id}`,
-        location: alert.detail.split('|')[0]?.trim() ?? alert.title,
-        riskLevel: alert.riskLevel,
-        riskScore: Math.max(20, 72 - index * 14),
-        source: 'fallback' as const,
-        title: alert.title,
-      })),
-  ]
-}
-
 function toRecentAlert(alert: LiveDangerAlert, index: number, reroutedAlertIds: Set<string>): RecentDangerAlert {
   const isRerouted = reroutedAlertIds.has(alert.id)
 
@@ -443,22 +404,6 @@ function toRecentAlert(alert: LiveDangerAlert, index: number, reroutedAlertIds: 
   }
 }
 
-function buildSafeAlert(avoidedLocation?: string): LiveDangerAlert {
-  return {
-    badgeLabel: '안전',
-    centerLat: fallbackAlertCoordinates[3].lat,
-    centerLng: fallbackAlertCoordinates[3].lng,
-    direction: avoidedLocation ? `${avoidedLocation} 우회 완료` : '현재 경로',
-    distanceMeters: 0,
-    id: 'safe-route-alert',
-    location: '현재 경로',
-    riskLevel: 'safe',
-    riskScore: 0,
-    source: 'api',
-    title: '현재 경로 주변 위험 구간 없음',
-  }
-}
-
 function getRoutePreview(alert: LiveDangerAlert, rerouteState: RerouteState | null): RoutePreview {
   const baseDistanceKm = Math.max(1.2, alert.distanceMeters / 1000 + 1.8)
   const extraDistanceKm = rerouteState ? rerouteState.extraDistanceMeters / 1000 : 0
@@ -471,7 +416,6 @@ function getRoutePreview(alert: LiveDangerAlert, rerouteState: RerouteState | nu
   }).format(arrival)
 
   return {
-    ...routePreview,
     estimatedArrival,
     remainingDistance,
   }
@@ -744,19 +688,27 @@ function RecentDangerAlertList({
       </div>
 
       <div className="space-y-3 xl:space-y-2.5">
-        {visibleAlerts.map((alert) => (
-          <RecentAlertRow key={alert.id} alert={alert} onClick={() => onSelectAlert(alert)} />
-        ))}
+        {visibleAlerts.length > 0 ? (
+          visibleAlerts.map((alert) => (
+            <RecentAlertRow key={alert.id} alert={alert} onClick={() => onSelectAlert(alert)} />
+          ))
+        ) : (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-[13px] font-bold text-slate-500">
+            실제 위험 알림 데이터가 없습니다.
+          </p>
+        )}
       </div>
 
-      <button
-        type="button"
-        onClick={onShowAll}
-        className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[14px] font-black text-blue-700 transition hover:bg-blue-50 xl:mt-3"
-      >
-        {isExpanded ? '주요 알림만 보기' : '전체 알림 보기'}
-        <ChevronRight size={16} aria-hidden="true" />
-      </button>
+      {alerts.length > 4 && (
+        <button
+          type="button"
+          onClick={onShowAll}
+          className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[14px] font-black text-blue-700 transition hover:bg-blue-50 xl:mt-3"
+        >
+          {isExpanded ? '주요 알림만 보기' : '전체 알림 보기'}
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
+      )}
     </section>
   )
 }
@@ -909,8 +861,8 @@ function AlertSettingsPanel({
 
 export function AlertsPage() {
   const [settingsState, setSettingsState] = useState<SavedAlertSettings>(() => readSavedAlertSettings())
-  const [alerts, setAlerts] = useState<LiveDangerAlert[]>(() => toFallbackLiveAlerts())
-  const [activeAlertId, setActiveAlertId] = useState(currentDangerAlert.id)
+  const [alerts, setAlerts] = useState<LiveDangerAlert[]>([])
+  const [activeAlertId, setActiveAlertId] = useState('')
   const [reroutedAlertIds, setReroutedAlertIds] = useState<Set<string>>(() => new Set())
   const [rerouteState, setRerouteState] = useState<RerouteState | null>(null)
   const [isAlertLoading, setIsAlertLoading] = useState(true)
@@ -954,14 +906,13 @@ export function AlertsPage() {
       setActiveAlertId(apiAlerts[0].id)
       setAlertDataNotice('')
     } else {
-      const fallbackAlerts = toFallbackLiveAlerts()
-      setAlerts(fallbackAlerts)
-      setActiveAlertId(fallbackAlerts[0]?.id ?? currentDangerAlert.id)
-      setAlertDataNotice(ALERT_FALLBACK_NOTICE)
+      setAlerts([])
+      setActiveAlertId('')
+      setAlertDataNotice(ALERT_EMPTY_NOTICE)
     }
 
     if (zonesResult.status === 'rejected' && latestResult.status === 'rejected') {
-      setAlertDataNotice('위험도 API 연결에 실패해 예시 알림 데이터를 표시하고 있습니다.')
+      setAlertDataNotice('실제 위험도 API 연결에 실패했습니다. 백엔드 상태를 확인해 주세요.')
     }
 
     setRerouteState(null)
@@ -1005,16 +956,16 @@ export function AlertsPage() {
   }, [])
 
   const activeAlert = useMemo(() => {
-    return alerts.find((alert) => alert.id === activeAlertId) ?? alerts[0] ?? buildSafeAlert()
+    return alerts.find((alert) => alert.id === activeAlertId) ?? alerts[0]
   }, [activeAlertId, alerts])
 
-  const routeSummary = useMemo(() => getRoutePreview(activeAlert, rerouteState), [activeAlert, rerouteState])
+  const routeSummary = useMemo(() => activeAlert ? getRoutePreview(activeAlert, rerouteState) : undefined, [activeAlert, rerouteState])
 
   const recentAlertRows = useMemo(() => {
     return alerts.map((alert, index) => toRecentAlert(alert, index, reroutedAlertIds))
   }, [alerts, reroutedAlertIds])
 
-  const isActiveAlertRerouted = reroutedAlertIds.has(activeAlert.id)
+  const isActiveAlertRerouted = activeAlert ? reroutedAlertIds.has(activeAlert.id) : false
 
   const handleToggle = (type: AlertToggleType) => {
     updateSettings((current) => ({
@@ -1032,6 +983,11 @@ export function AlertsPage() {
   }
 
   const handleReroute = () => {
+    if (!activeAlert) {
+      setMockNotice('실제 위험 알림 데이터가 없어 경로를 재탐색할 수 없습니다.')
+      return
+    }
+
     if (activeAlert.riskLevel === 'safe') {
       setMockNotice('현재 경로 주변에는 우회할 위험 구간이 없습니다.')
       return
@@ -1054,9 +1010,8 @@ export function AlertsPage() {
     if (nextAlert) {
       setActiveAlertId(nextAlert.id)
     } else {
-      const safeAlert = buildSafeAlert(activeAlert.location)
-      setAlerts((current) => (current.some((alert) => alert.id === safeAlert.id) ? current : [safeAlert, ...current]))
-      setActiveAlertId(safeAlert.id)
+      setMockNotice(`${activeAlert.location} 위험 구간을 피하도록 경로를 갱신했습니다. 추가 실제 위험 알림은 없습니다.`)
+      return
     }
 
     setMockNotice(`${activeAlert.location} 위험 구간을 피하도록 경로를 갱신했습니다.`)
@@ -1099,22 +1054,31 @@ export function AlertsPage() {
 
       <MockNotice message={noticeMessage} />
 
-      <div className="mt-5">
-        <DangerBanner
-          alert={activeAlert}
-          isRerouted={isActiveAlertRerouted}
-          onReroute={handleReroute}
-        />
-        <KakaoAlertRouteMap
-          alert={activeAlert}
-          isRerouted={rerouteState !== null}
-          onDetailRoute={() => {
-            setShowAllAlerts(true)
-            setMockNotice(`현재 경로와 관련된 위험 알림 ${recentAlertRows.length}건을 표시했습니다.`)
-          }}
-          preview={routeSummary}
-        />
-      </div>
+      {activeAlert && routeSummary ? (
+        <div className="mt-5">
+          <DangerBanner
+            alert={activeAlert}
+            isRerouted={isActiveAlertRerouted}
+            onReroute={handleReroute}
+          />
+          <KakaoAlertRouteMap
+            alert={activeAlert}
+            isRerouted={rerouteState !== null}
+            onDetailRoute={() => {
+              setShowAllAlerts(true)
+              setMockNotice(`현재 경로와 관련된 위험 알림 ${recentAlertRows.length}건을 표시했습니다.`)
+            }}
+            preview={routeSummary}
+          />
+        </div>
+      ) : (
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-[0_14px_34px_rgba(15,40,70,0.06)]">
+          <h2 className="text-[20px] font-black text-[#07182F]">실시간 위험 알림 없음</h2>
+          <p className="mt-3 text-[13px] font-bold leading-5 text-slate-500">
+            실제 위험도 데이터가 수신되면 지도와 경로 알림을 표시합니다.
+          </p>
+        </section>
+      )}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-3 xl:gap-5">
         {alertToggleSettings.map((setting) => (
