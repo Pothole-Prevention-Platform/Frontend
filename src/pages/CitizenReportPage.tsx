@@ -1,25 +1,28 @@
-import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react'
 import {
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CloudUpload,
   FileText,
   Info,
+  LocateFixed,
   Lock,
   MapPin,
-  Navigation,
+  Minus,
+  Plus,
   RefreshCcw,
-  Search,
   X,
 } from 'lucide-react'
+import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { useNavigate } from 'react-router-dom'
 import {
   createCitizenReport,
   getReportId,
   REPORT_IMAGE_MAX_BYTES,
-  SEOUL_FALLBACK_COORDINATES,
 } from '../api/reportApi'
+import { interactiveKakaoMapOptions } from '../constants/kakaoMapOptions'
 import {
   aiVerificationSteps,
   citizenReportMock,
@@ -30,18 +33,64 @@ import type { RecentCitizenReport, ReportSeverityId, RiskSeverityOption } from '
 import type { HazardType, ReporterSeverity } from '../types/report'
 import { cn } from '../utils/cn'
 
-type AssetImageProps = {
-  sources: string[]
-  alt: string
-  className: string
-  fallback: ReactNode
-}
-
 type SectionTitleProps = {
   number: number
   title: string
   label?: '필수' | '선택'
 }
+
+const reportLocationOptions = [
+  {
+    id: 'gangnam-teheran',
+    district: '강남구',
+    label: '강남구 테헤란로',
+    address: '서울특별시 강남구 테헤란로 123',
+    latitude: 37.5006,
+    longitude: 127.0334,
+    previewPosition: { left: 57, top: 66 },
+  },
+  {
+    id: 'seocho-yangjaecheon',
+    district: '서초구',
+    label: '서초구 양재천로',
+    address: '서울특별시 서초구 양재천로 123',
+    latitude: 37.4759,
+    longitude: 127.0384,
+    previewPosition: { left: 54, top: 75 },
+  },
+  {
+    id: 'songpa-olympic',
+    district: '송파구',
+    label: '송파구 올림픽로',
+    address: '서울특별시 송파구 올림픽로 300',
+    latitude: 37.5133,
+    longitude: 127.1043,
+    previewPosition: { left: 77, top: 62 },
+  },
+  {
+    id: 'jongno-changgyeonggung',
+    district: '종로구',
+    label: '종로구 창경궁로',
+    address: '서울특별시 종로구 창경궁로 256',
+    latitude: 37.5847,
+    longitude: 127.0008,
+    previewPosition: { left: 46, top: 38 },
+  },
+  {
+    id: 'mapo-worldcup',
+    district: '마포구',
+    label: '마포구 월드컵로',
+    address: '서울특별시 마포구 월드컵로 45',
+    latitude: 37.5568,
+    longitude: 126.9106,
+    previewPosition: { left: 21, top: 51 },
+  },
+] as const
+
+type ReportLocationId = (typeof reportLocationOptions)[number]['id']
+type ReportLocationOption = (typeof reportLocationOptions)[number]
+
+const defaultReportLocationId: ReportLocationId = 'seocho-yangjaecheon'
 
 const riskTypeOptions = [
   '포트홀 (도로 파임)',
@@ -106,24 +155,6 @@ function formatFileSize(file: File) {
   return `${Math.max(1, Math.round(file.size / 1024))}KB`
 }
 
-function AssetImage({ sources, alt, className, fallback }: AssetImageProps) {
-  const [sourceIndex, setSourceIndex] = useState(0)
-  const src = sources[sourceIndex]
-
-  if (!src) {
-    return <>{fallback}</>
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      onError={() => setSourceIndex((current) => current + 1)}
-    />
-  )
-}
-
 function SectionTitle({ number, title, label }: SectionTitleProps) {
   return (
     <h3 className="text-[17px] font-black text-[#07182F]">
@@ -147,23 +178,26 @@ function BlankPhotoSpace({ compact = false }: { compact?: boolean }) {
   )
 }
 
-function FallbackLocationMap() {
+function FallbackLocationMap({ location }: { location: ReportLocationOption }) {
   return (
     <div
       role="img"
-      aria-label="신고 위치 지도 미리보기"
+      aria-label={`${location.address} 지도 미리보기`}
       className="absolute inset-0 overflow-hidden bg-slate-100"
     >
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(148,163,184,0.18)_1px,transparent_1px),linear-gradient(rgba(148,163,184,0.18)_1px,transparent_1px)] bg-[size:28px_28px]" />
       <div className="absolute left-[-18%] top-[20%] h-6 w-[140%] rotate-[-18deg] rounded-full bg-green-100 shadow-[0_0_0_6px_rgba(255,255,255,0.62)]" />
       <div className="absolute left-[-18%] top-[54%] h-7 w-[142%] rotate-[14deg] rounded-full bg-slate-200 shadow-[0_0_0_6px_rgba(255,255,255,0.58)]" />
       <div className="absolute left-[46%] top-[-28%] h-[160%] w-5 rotate-[9deg] rounded-full bg-blue-100 shadow-[0_0_0_5px_rgba(255,255,255,0.55)]" />
-      <MapPin
-        className="absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1/2 text-blue-700 drop-shadow-md"
-        size={46}
-        fill="#0B6DDE"
-        aria-hidden="true"
-      />
+      <div
+        className="absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
+        style={{ left: `${location.previewPosition.left}%`, top: `${location.previewPosition.top}%` }}
+      >
+        <MapPin className="text-blue-700 drop-shadow-md" size={46} fill="#0B6DDE" aria-hidden="true" />
+        <span className="mt-[-4px] max-w-[120px] truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
+          {location.district}
+        </span>
+      </div>
     </div>
   )
 }
@@ -241,69 +275,156 @@ function PhotoSection({
   )
 }
 
-function MapPreview() {
+function formatCoordinate(value: number) {
+  return value.toFixed(6)
+}
+
+function MapPreview({ location }: { location: ReportLocationOption }) {
+  const kakaoJavaScriptKey = import.meta.env.VITE_KAKAO_JAVASCRIPT_KEY?.trim() ?? ''
+  const [isMapLoading, mapError] = useKakaoLoader({
+    appkey: kakaoJavaScriptKey,
+  })
+  const mapRef = useRef<kakao.maps.Map | null>(null)
+  const [mapLevel, setMapLevel] = useState(4)
+  const position = {
+    lat: location.latitude,
+    lng: location.longitude,
+  }
+  const canShowKakaoMap = Boolean(kakaoJavaScriptKey) && !mapError
+
+  useEffect(() => {
+    if (!mapRef.current || typeof kakao === 'undefined') {
+      return
+    }
+
+    const nextCenter = new kakao.maps.LatLng(location.latitude, location.longitude)
+    mapRef.current.relayout()
+    mapRef.current.panTo(nextCenter)
+  }, [location.latitude, location.longitude])
+
+  const changeZoomLevel = (delta: number) => {
+    setMapLevel((current) => {
+      const nextLevel = Math.min(10, Math.max(1, current + delta))
+      mapRef.current?.setLevel(nextLevel)
+      return nextLevel
+    })
+  }
+
+  const recenterMap = () => {
+    setMapLevel(4)
+
+    if (!mapRef.current || typeof kakao === 'undefined') {
+      return
+    }
+
+    mapRef.current.setLevel(4)
+    mapRef.current.panTo(new kakao.maps.LatLng(location.latitude, location.longitude))
+  }
+
   return (
     <div className="relative h-[176px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 lg:h-[156px] lg:w-[270px]">
-      <AssetImage
-        sources={citizenReportMock.mapSources}
-        alt="신고 위치 지도 미리보기"
-        className="h-full w-full object-cover"
-        fallback={<FallbackLocationMap />}
-      />
+      {canShowKakaoMap ? (
+        <Map
+          center={position}
+          className="kakao-map-root h-full w-full"
+          isPanto
+          level={mapLevel}
+          onCreate={(map) => {
+            mapRef.current = map
+          }}
+          style={{ height: '100%', width: '100%' }}
+          {...interactiveKakaoMapOptions}
+        >
+          <CustomOverlayMap position={position} yAnchor={1}>
+            <div className="flex -translate-y-1 flex-col items-center">
+              <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_12px_26px_rgba(0,95,220,0.32)]">
+                <span className="absolute inset-[-7px] rounded-full bg-blue-500/20" />
+                <MapPin size={25} fill="currentColor" strokeWidth={2.6} aria-hidden="true" className="relative z-10" />
+              </div>
+              <span className="mt-1 max-w-[118px] truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
+                {location.district}
+              </span>
+            </div>
+          </CustomOverlayMap>
+        </Map>
+      ) : (
+        <FallbackLocationMap location={location} />
+      )}
+
+      <div className="absolute left-2 top-2 max-w-[176px] rounded-lg bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
+        <p className="truncate text-[11px] font-black text-blue-700">{location.label}</p>
+        <p className="mt-1 text-[10px] font-bold text-slate-500">
+          {formatCoordinate(location.latitude)} · {formatCoordinate(location.longitude)}
+        </p>
+      </div>
 
       <div className="absolute bottom-2 left-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <button
           type="button"
           aria-label="지도 확대"
+          onClick={() => changeZoomLevel(-1)}
           className="flex h-8 w-8 items-center justify-center border-b border-slate-200 text-xl text-slate-700 transition hover:bg-blue-50"
         >
-          +
+          <Plus size={16} aria-hidden="true" />
         </button>
         <button
           type="button"
           aria-label="지도 축소"
+          onClick={() => changeZoomLevel(1)}
           className="flex h-8 w-8 items-center justify-center text-xl text-slate-700 transition hover:bg-blue-50"
         >
-          −
+          <Minus size={16} aria-hidden="true" />
         </button>
       </div>
 
       <button
         type="button"
-        aria-label="현재 위치 보기"
+        aria-label="선택 위치 보기"
+        onClick={recenterMap}
         className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-blue-50"
       >
-        <Navigation size={17} aria-hidden="true" />
+        <LocateFixed size={17} aria-hidden="true" />
       </button>
+
+      {canShowKakaoMap && isMapLoading && (
+        <div className="absolute inset-x-2 bottom-12 rounded-lg bg-white/95 px-3 py-2 text-center text-[11px] font-black text-blue-700 shadow-sm">
+          지도를 불러오는 중입니다.
+        </div>
+      )}
     </div>
   )
 }
 
 function LocationSection({
-  address,
+  selectedLocation,
+  selectedLocationId,
   locationDetail,
+  onLocationChange,
   onLocationDetailChange,
 }: {
-  address: string
+  selectedLocation: ReportLocationOption
+  selectedLocationId: ReportLocationId
   locationDetail: string
+  onLocationChange: (locationId: ReportLocationId) => void
   onLocationDetailChange: (locationDetail: string) => void
 }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[270px_minmax(0,1fr)]">
-      <MapPreview />
+      <MapPreview location={selectedLocation} />
 
       <div className="min-w-0">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <MapPin size={18} className="text-blue-700" fill="#0B6DDE" aria-hidden="true" />
-            <span className="text-[14px] font-black text-slate-800">GPS 자동 위치</span>
+            <span className="text-[14px] font-black text-slate-800">선택 위치</span>
             <span className="rounded-full bg-blue-100 px-3 py-1 text-[11px] font-black text-blue-700">
-              {citizenReportMock.gpsAccuracy}
+              {selectedLocation.district}
             </span>
           </div>
 
           <button
             type="button"
+            onClick={() => onLocationChange(defaultReportLocationId)}
             className="flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12px] font-black text-slate-600 shadow-sm transition hover:bg-slate-50"
           >
             <RefreshCcw size={14} aria-hidden="true" />
@@ -311,25 +432,49 @@ function LocationSection({
           </button>
         </div>
 
-        <div>
-          <label htmlFor="report-address" className="text-[12px] font-black text-slate-600">
-            주소
-          </label>
-          <div className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_96px]">
+        <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="min-w-0">
+            <label htmlFor="report-location" className="text-[12px] font-black text-slate-600">
+              지원 지역
+            </label>
+            <div className="relative mt-2">
+              <select
+                id="report-location"
+                value={selectedLocationId}
+                onChange={(event) => onLocationChange(event.target.value as ReportLocationId)}
+                className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-4 pr-9 text-[13px] font-bold text-slate-700 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              >
+                {reportLocationOptions.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                aria-hidden="true"
+              />
+            </div>
+          </div>
+
+          <div className="min-w-0">
+            <label htmlFor="report-address" className="text-[12px] font-black text-slate-600">
+              주소
+            </label>
             <input
               id="report-address"
-              value={address}
+              value={selectedLocation.address}
               readOnly
-              className="h-10 min-w-0 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 outline-none"
+              className="mt-2 h-10 min-w-0 w-full rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 outline-none"
             />
-            <button
-              type="button"
-              className="flex h-10 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
-            >
-              <Search size={14} aria-hidden="true" />
-              주소 검색
-            </button>
           </div>
+        </div>
+
+        <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/55 px-3 py-2">
+          <p className="text-[12px] font-bold leading-5 text-blue-800">
+            위도 {formatCoordinate(selectedLocation.latitude)} · 경도 {formatCoordinate(selectedLocation.longitude)}
+          </p>
         </div>
 
         <div className="mt-3">
@@ -461,7 +606,8 @@ function ReportForm({
   selectedSeverity,
   riskType,
   description,
-  address,
+  selectedLocation,
+  selectedLocationId,
   locationDetail,
   previewUrl,
   fileName,
@@ -471,6 +617,7 @@ function ReportForm({
   onRiskTypeChange,
   onSelectSeverity,
   onDescriptionChange,
+  onLocationChange,
   onLocationDetailChange,
   onSubmit,
   errorMessage,
@@ -480,7 +627,8 @@ function ReportForm({
   selectedSeverity: ReportSeverityId
   riskType: string
   description: string
-  address: string
+  selectedLocation: ReportLocationOption
+  selectedLocationId: ReportLocationId
   locationDetail: string
   previewUrl: string | null
   fileName: string | null
@@ -490,6 +638,7 @@ function ReportForm({
   onRiskTypeChange: (riskType: string) => void
   onSelectSeverity: (severity: ReportSeverityId) => void
   onDescriptionChange: (description: string) => void
+  onLocationChange: (locationId: ReportLocationId) => void
   onLocationDetailChange: (locationDetail: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   errorMessage: string
@@ -525,8 +674,10 @@ function ReportForm({
         <SectionTitle number={2} title="위치 정보" label="필수" />
         <div className="mt-4">
           <LocationSection
-            address={address}
+            selectedLocation={selectedLocation}
+            selectedLocationId={selectedLocationId}
             locationDetail={locationDetail}
+            onLocationChange={onLocationChange}
             onLocationDetailChange={onLocationDetailChange}
           />
         </div>
@@ -752,13 +903,15 @@ export function CitizenReportPage() {
   const [selectedSeverity, setSelectedSeverity] = useState<ReportSeverityId>(citizenReportMock.defaultSeverity)
   const [riskType, setRiskType] = useState(citizenReportMock.defaultRiskType)
   const [description, setDescription] = useState('')
-  const [address] = useState(citizenReportMock.address)
+  const [selectedLocationId, setSelectedLocationId] = useState<ReportLocationId>(defaultReportLocationId)
   const [locationDetail, setLocationDetail] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const preservePreviewUrlRef = useRef(false)
+  const selectedLocation =
+    reportLocationOptions.find((location) => location.id === selectedLocationId) ?? reportLocationOptions[0]
 
   useEffect(() => {
     return () => {
@@ -803,6 +956,11 @@ export function CitizenReportPage() {
     setPreviewUrl(null)
   }
 
+  const handleLocationChange = (locationId: ReportLocationId) => {
+    setSelectedLocationId(locationId)
+    setSubmitError('')
+  }
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -822,9 +980,9 @@ export function CitizenReportPage() {
     try {
       const result = await createCitizenReport({
         image: selectedFile,
-        latitude: SEOUL_FALLBACK_COORDINATES.latitude,
-        longitude: SEOUL_FALLBACK_COORDINATES.longitude,
-        address: address.trim() || undefined,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        address: selectedLocation.address,
         locationDetail: locationDetail.trim() || undefined,
         hazardType: hazardTypeByLabel[riskType] ?? 'OTHER',
         reporterSeverity: reporterSeverityById[selectedSeverity],
@@ -867,7 +1025,8 @@ export function CitizenReportPage() {
           selectedSeverity={selectedSeverity}
           riskType={riskType}
           description={description}
-          address={address}
+          selectedLocation={selectedLocation}
+          selectedLocationId={selectedLocationId}
           locationDetail={locationDetail}
           previewUrl={previewUrl}
           fileName={fileName}
@@ -877,6 +1036,7 @@ export function CitizenReportPage() {
           onRiskTypeChange={setRiskType}
           onSelectSeverity={setSelectedSeverity}
           onDescriptionChange={setDescription}
+          onLocationChange={handleLocationChange}
           onLocationDetailChange={setLocationDetail}
           onSubmit={handleSubmit}
           errorMessage={submitError}
