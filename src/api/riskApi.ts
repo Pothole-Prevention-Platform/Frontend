@@ -1,5 +1,5 @@
 import { apiJson } from './apiClient'
-import type { RiskDistrictRanking, RiskGridResult } from '../types/risk'
+import type { RiskDistrictRanking, RiskGridResult, RiskMapSummaryResponse } from '../types/risk'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -51,6 +51,21 @@ export async function getRiskZones(districtName?: string) {
   const queryString = searchParams.toString()
   const response = await apiJson<unknown>(`/api/v1/dashboard/risk/zones${queryString ? `?${queryString}` : ''}`)
   return getRecordArray<RiskGridResult>(response).sort((a, b) => getRiskScore(b) - getRiskScore(a))
+}
+
+export async function getRiskMapSummary({
+  markerLimit = 40,
+  zoneLimit = 8,
+}: {
+  markerLimit?: number
+  zoneLimit?: number
+} = {}) {
+  const searchParams = new URLSearchParams({
+    markerLimit: String(Math.min(100, Math.max(1, Math.trunc(markerLimit)))),
+    zoneLimit: String(Math.min(30, Math.max(1, Math.trunc(zoneLimit)))),
+  })
+
+  return apiJson<RiskMapSummaryResponse>(`/api/v1/dashboard/risk/map-summary?${searchParams.toString()}`)
 }
 
 export async function getDistrictRiskRanking() {

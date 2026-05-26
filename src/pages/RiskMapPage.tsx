@@ -13,10 +13,10 @@ import {
   UserRound,
 } from 'lucide-react'
 import { getCitizenReports } from '../api/reportApi'
-import { getGridRiskResult, getLatestGridRiskResults, getRiskZones } from '../api/riskApi'
+import { getGridRiskResult, getLatestGridRiskResults, getRiskMapSummary, getRiskZones } from '../api/riskApi'
 import { KakaoRiskMap } from '../components/risk/KakaoRiskMap'
 import { riskLegend, riskMapFilters } from '../data/mockData'
-import type { RiskGridResult, RiskMapFilterId, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem, RiskMapStats } from '../types'
+import type { RiskGridResult, RiskMapFilterId, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem, RiskMapStats, RiskMapSummaryResponse } from '../types'
 import { cn } from '../utils/cn'
 
 type StatColor = 'red' | 'blue' | 'teal'
@@ -252,6 +252,19 @@ function buildRiskMapStats(results: RiskGridResult[], recentReportCount?: number
   return {
     highRiskCount,
     recentReportCount,
+  }
+}
+
+function buildRiskMapStatsFromSummary(summary: RiskMapSummaryResponse, fallbackRows: RiskGridResult[]): RiskMapStatsView | null {
+  const stats = summary.stats
+
+  if (!stats) {
+    return fallbackRows.length > 0 ? buildRiskMapStats(fallbackRows) : null
+  }
+
+  return {
+    highRiskCount: stats.highRiskCount,
+    recentReportCount: stats.recentReportCount,
   }
 }
 
@@ -605,10 +618,36 @@ export function RiskMapPage() {
   useEffect(() => {
     let ignore = false
 
-    async function loadRiskData() {
-      setIsRiskLoading(true)
-      setRiskNotice('')
+    function applyRiskRows({
+      mapRows,
+      recentReportCount,
+      statsView,
+      zoneRows,
+    }: {
+      mapRows: RiskGridResult[]
+      recentReportCount?: number
+      statsView?: RiskMapStatsView | null
+      zoneRows: RiskGridResult[]
+    }) {
+      const mapCoordinateRows = mapRows.filter(hasMapCoordinates)
+      const zoneSourceRows = zoneRows.length > 0 ? zoneRows : mapRows
+      const sortedRiskRows = sortRiskRowsByPriority(zoneSourceRows)
+      const apiZones = sortedRiskRows.slice(0, 8).map(toRiskMapHighZone)
 
+      setGridResults(mapCoordinateRows)
+      setZones(apiZones)
+      setStats(statsView ?? (mapRows.length > 0 ? buildRiskMapStats(mapRows, recentReportCount) : null))
+      setSelectedGrid(null)
+      setSelectedGridCode(undefined)
+
+      if (mapRows.length === 0) {
+        setRiskNotice(RISK_EMPTY_NOTICE)
+      } else if (mapCoordinateRows.length === 0) {
+        setRiskNotice(RISK_COORDINATE_NOTICE)
+      }
+    }
+
+    async function loadFallbackRiskData() {
       const [latestResult, zonesResult, reportsResult] = await Promise.allSettled([
         getLatestGridRiskResults(),
         getRiskZones(),
@@ -624,26 +663,44 @@ export function RiskMapPage() {
       const reportRows = reportsResult.status === 'fulfilled' ? reportsResult.value : []
       const recentReportCount = reportsResult.status === 'fulfilled' ? reportRows.length : undefined
       const mapRows = latestRows.length > 0 ? latestRows : zoneRows
-      const mapCoordinateRows = mapRows.filter(hasMapCoordinates)
-      const zoneSourceRows = zoneRows.length > 0 ? zoneRows : latestRows
-      const sortedRiskRows = sortRiskRowsByPriority(zoneSourceRows)
-      const apiZones = sortedRiskRows.slice(0, 8).map(toRiskMapHighZone)
 
-      setGridResults(mapCoordinateRows)
-      setZones(apiZones)
-      setStats(mapRows.length > 0 ? buildRiskMapStats(mapRows, recentReportCount) : null)
-      setSelectedGrid(null)
-      setSelectedGridCode(undefined)
+      applyRiskRows({
+        mapRows,
+        recentReportCount,
+        zoneRows,
+      })
 
       if (latestResult.status === 'rejected' && zonesResult.status === 'rejected') {
         setRiskNotice('실제 위험도 API 연결에 실패했습니다. 백엔드 상태를 확인해 주세요.')
-      } else if (mapRows.length === 0) {
-        setRiskNotice(RISK_EMPTY_NOTICE)
-      } else if (mapCoordinateRows.length === 0) {
-        setRiskNotice(RISK_COORDINATE_NOTICE)
+      }
+    }
+
+    async function loadRiskData() {
+      setIsRiskLoading(true)
+      setRiskNotice('')
+
+      try {
+        const summary = await getRiskMapSummary({ markerLimit: 40, zoneLimit: 8 })
+
+        if (ignore) {
+          return
+        }
+
+        const mapRows = summary.markers ?? []
+        const zoneRows = summary.zones ?? []
+
+        applyRiskRows({
+          mapRows,
+          statsView: buildRiskMapStatsFromSummary(summary, mapRows),
+          zoneRows,
+        })
+      } catch {
+        await loadFallbackRiskData()
       }
 
-      setIsRiskLoading(false)
+      if (!ignore) {
+        setIsRiskLoading(false)
+      }
     }
 
     void loadRiskData()

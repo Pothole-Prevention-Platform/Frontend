@@ -46,3 +46,17 @@ export interface RiskDistrictRanking {
 }
 
 export type RiskZone = RiskGridResult
+
+export interface RiskMapSummaryStats {
+  highRiskCount?: number
+  recentReportCount?: number
+  latestCalculatedAt?: string | null
+  [key: string]: unknown
+}
+
+export interface RiskMapSummaryResponse {
+  markers?: RiskGridResult[]
+  zones?: RiskGridResult[]
+  stats?: RiskMapSummaryStats | null
+  [key: string]: unknown
+}
