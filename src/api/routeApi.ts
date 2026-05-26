@@ -45,7 +45,15 @@ function normalizeDrivingRoute(value: unknown): DrivingRouteResponse {
   }
 }
 
+function isDrivingRouteApiEnabled() {
+  return import.meta.env.VITE_ENABLE_ROUTE_DIRECTIONS === 'true'
+}
+
 export async function getDrivingRoute(request: DrivingRouteRequest) {
+  if (!isDrivingRouteApiEnabled()) {
+    return { path: [] }
+  }
+
   const response = await apiJson<unknown>('/api/v1/routes/directions', {
     body: request,
     method: 'POST',
