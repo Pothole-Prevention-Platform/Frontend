@@ -43,7 +43,7 @@ export const citizenReportMock: CitizenReportMock = {
   uploadedFileName: '',
   uploadedFileSize: '',
   previewSources: [],
-  mapSources: ['/assets/report/report-location-map.webp', '/assets/report/report-location-map.png'],
+  mapSources: [],
   address: '서울특별시 서초구 양재천로 123',
   detailLocationPlaceholder: '건물명, 도로명, 방향, 주변 시설 등 상세 정보를 입력하세요.',
   gpsAccuracy: '정확도 5m',
@@ -421,8 +421,8 @@ export const agencyLookupResult: AgencyLookupResult = {
   province: '서울특별시',
   districtOffice: '강남구청',
   roadManagementAgency: '강남구 도로관리과',
-  mapImageUrl: '/assets/agency/agency-location-map.webp',
-  fallbackMapImageUrl: '/assets/agency/agency-location-map.png',
+  mapImageUrl: '',
+  fallbackMapImageUrl: '',
 }
 
 export const compensationSteps: CompensationStep[] = [
@@ -458,24 +458,24 @@ export const evidencePhotos: EvidencePhoto[] = [
   {
     id: 'evidence-road',
     title: '도로 파손 부위',
-    imageUrl: '/assets/agency/damage-road.webp',
-    fallbackImageUrl: '/assets/agency/damage-road.png',
+    imageUrl: '',
+    fallbackImageUrl: '',
     alt: '도로 파손 부위 사진',
     fallbackType: 'road',
   },
   {
     id: 'evidence-wheel',
     title: '차량 휠 손상',
-    imageUrl: '/assets/agency/damage-wheel.webp',
-    fallbackImageUrl: '/assets/agency/damage-wheel.png',
+    imageUrl: '',
+    fallbackImageUrl: '',
     alt: '차량 휠 손상 사진',
     fallbackType: 'wheel',
   },
   {
     id: 'evidence-tire',
     title: '타이어 손상',
-    imageUrl: '/assets/agency/damage-tire.webp',
-    fallbackImageUrl: '/assets/agency/damage-tire.png',
+    imageUrl: '',
+    fallbackImageUrl: '',
     alt: '타이어 손상 사진',
     fallbackType: 'tire',
   },
@@ -523,8 +523,8 @@ export const claimChecklistItems: ClaimChecklistItem[] = [
 ]
 
 export const claimDocumentPreview: ClaimDocumentPreview = {
-  imageUrl: '/assets/agency/claim-document-preview.webp',
-  fallbackImageUrl: '/assets/agency/claim-document-preview.png',
+  imageUrl: '',
+  fallbackImageUrl: '',
   currentPage: 1,
   totalPage: 2,
 }
@@ -546,8 +546,8 @@ export const myPageProfile: MyPageProfile = {
   email: 'honggildong@email.com',
   phone: '010-1234-5678',
   joinedAt: '2024. 03. 15',
-  avatarUrl: '/assets/mypage/profile-avatar.webp',
-  fallbackAvatarUrl: '/assets/mypage/profile-avatar.png',
+  avatarUrl: '',
+  fallbackAvatarUrl: '',
 }
 
 export const myPageStats: MyPageStat[] = [
@@ -588,24 +588,24 @@ export const myPageInterestItems: MyPageInterestItem[] = [
     type: 'region',
     title: '서울특별시 강남구',
     badgeLabel: '관심 지역',
-    imageUrl: '/assets/mypage/mypage-region-gangnam.webp',
-    fallbackImageUrl: '/assets/mypage/mypage-region-gangnam.png',
+    imageUrl: '',
+    fallbackImageUrl: '',
   },
   {
     id: 'interest-mapo',
     type: 'region',
     title: '마포구',
     badgeLabel: '관심 지역',
-    imageUrl: '/assets/mypage/mypage-region-mapo.webp',
-    fallbackImageUrl: '/assets/mypage/mypage-region-mapo.png',
+    imageUrl: '',
+    fallbackImageUrl: '',
   },
   {
     id: 'route-gangnam-seocho',
     type: 'route',
     title: '강남구-서초구 경로',
     badgeLabel: '관심 경로',
-    imageUrl: '/assets/mypage/mypage-route-gangnam-seocho.webp',
-    fallbackImageUrl: '/assets/mypage/mypage-route-gangnam-seocho.png',
+    imageUrl: '',
+    fallbackImageUrl: '',
   },
 ]
 

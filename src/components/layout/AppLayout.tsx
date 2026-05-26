@@ -132,7 +132,7 @@ function PromoCard() {
         시민이 함께 안전을 만듭니다.
       </p>
       <AssetImage
-        sources={['/assets/auth/signup-security.webp', '/assets/auth/signup-security.png']}
+        sources={['/assets/auth/signup-security.png']}
         alt="안전한 도로 서비스를 상징하는 방패 일러스트"
         className="mx-auto mt-4 h-[62px] w-[72px] object-contain"
         fallback={
@@ -174,7 +174,7 @@ function UserAvatar() {
   return (
     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-blue-100 text-slate-700 shadow-sm">
       <AssetImage
-        sources={['/assets/mypage/profile-avatar.webp', '/assets/mypage/profile-avatar.png']}
+        sources={[]}
         alt="사용자 프로필 이미지"
         className="h-full w-full object-cover"
         fallback={<UserRound size={26} aria-hidden="true" />}
