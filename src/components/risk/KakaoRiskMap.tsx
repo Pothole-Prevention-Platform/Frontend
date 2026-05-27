@@ -30,9 +30,9 @@ type RiskMarker = {
   }
 }
 
-const SEOUL_CENTER = {
-  lat: 37.5665,
-  lng: 126.978,
+const INITIAL_MAP_CENTER = {
+  lat: 37.5509,
+  lng: 126.8495,
 }
 
 const MAX_VISIBLE_MARKERS = 40
@@ -301,7 +301,7 @@ export function KakaoRiskMap({
   return (
     <section className="relative h-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-[0_18px_45px_rgba(15,40,70,0.08)] sm:h-[500px] xl:h-[560px]">
       <Map
-        center={SEOUL_CENTER}
+        center={INITIAL_MAP_CENTER}
         className="kakao-map-root h-full w-full"
         isPanto
         level={7}
