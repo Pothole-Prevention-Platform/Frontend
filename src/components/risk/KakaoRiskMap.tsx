@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { X } from 'lucide-react'
 import { interactiveKakaoMapOptions } from '../../constants/kakaoMapOptions'
@@ -281,6 +281,22 @@ export function KakaoRiskMap({
     appkey: kakaoJavaScriptKey,
   })
   const markers = useMemo(() => buildMarkers(gridResults), [gridResults])
+  const [isMapCreated, setIsMapCreated] = useState(false)
+  const [shouldRenderMarkers, setShouldRenderMarkers] = useState(false)
+
+  useEffect(() => {
+    if (!isMapCreated || isLoading) {
+      setShouldRenderMarkers(false)
+      return
+    }
+
+    setShouldRenderMarkers(false)
+    const markerRenderTimer = window.setTimeout(() => {
+      setShouldRenderMarkers(true)
+    }, 120)
+
+    return () => window.clearTimeout(markerRenderTimer)
+  }, [isLoading, isMapCreated, markers])
 
   if (!kakaoJavaScriptKey) {
     return (
@@ -305,10 +321,11 @@ export function KakaoRiskMap({
         className="kakao-map-root h-full w-full"
         isPanto
         level={7}
+        onCreate={() => setIsMapCreated(true)}
         style={{ height: '100%', width: '100%' }}
         {...interactiveKakaoMapOptions}
       >
-        {markers.map((marker) => {
+        {shouldRenderMarkers && markers.map((marker) => {
           const isSelected = marker.gridCode !== undefined && marker.gridCode === activeGridCode
           const markerValue = marker.riskScore === undefined ? marker.riskLevelLabel : Math.round(marker.riskScore)
 
@@ -349,7 +366,13 @@ export function KakaoRiskMap({
         </div>
       )}
 
-      {!isLoading && markers.length === 0 && (
+      {!isLoading && isMapCreated && !shouldRenderMarkers && markers.length > 0 && (
+        <div className="absolute left-4 top-4 z-20 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[12px] font-bold text-blue-700 shadow-sm">
+          위험 격자를 지도에 표시하는 중입니다.
+        </div>
+      )}
+
+      {!isLoading && shouldRenderMarkers && markers.length === 0 && (
         <div className="absolute left-4 top-4 z-20 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 text-[12px] font-bold text-slate-600 shadow-sm">
           표시할 위험 격자가 없습니다.
         </div>

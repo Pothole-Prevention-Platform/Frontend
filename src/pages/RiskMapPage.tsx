@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { lazy, Suspense, type ReactNode, useEffect, useState } from 'react'
 import {
   Building2,
   ChevronDown,
@@ -14,10 +14,15 @@ import {
 } from 'lucide-react'
 import { getCitizenReports } from '../api/reportApi'
 import { getGridRiskResult, getLatestGridRiskResults, getRiskMapSummary, getRiskZones } from '../api/riskApi'
-import { KakaoRiskMap } from '../components/risk/KakaoRiskMap'
 import { riskLegend, riskMapFilters } from '../data/mockData'
 import type { RiskGridResult, RiskMapFilterId, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem, RiskMapStats, RiskMapSummaryResponse } from '../types'
 import { cn } from '../utils/cn'
+
+const KakaoRiskMap = lazy(() =>
+  import('../components/risk/KakaoRiskMap').then((module) => ({
+    default: module.KakaoRiskMap,
+  })),
+)
 
 type StatColor = 'red' | 'blue' | 'teal'
 
@@ -30,6 +35,7 @@ const defaultFilterValues: Record<RiskMapFilterId, string> = {
 
 const RISK_EMPTY_NOTICE = '표시할 실제 위험도 데이터가 없습니다. 위험도 산출 후 다시 확인해 주세요.'
 const RISK_COORDINATE_NOTICE = '실제 위험도 데이터에 지도 좌표가 없어 목록만 표시합니다.'
+const MAX_MAP_ROWS_FOR_RENDER = 80
 
 const filterIcons: Record<RiskMapFilterId, ReactNode> = {
   rainfall: <CloudRain size={22} aria-hidden="true" />,
@@ -455,6 +461,14 @@ function RiskSummaryPanel({ stats }: { stats: RiskMapStatsView | null }) {
   )
 }
 
+function RiskMapLoadingFrame() {
+  return (
+    <section className="flex h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-6 text-center shadow-[0_18px_45px_rgba(15,40,70,0.08)] sm:h-[500px] xl:h-[560px]">
+      <p className="text-[14px] font-bold leading-6 text-slate-600">지도를 준비하는 중입니다.</p>
+    </section>
+  )
+}
+
 function RiskGradeBadge({ grade }: { grade: RiskMapHighZoneGrade }) {
   return (
     <span className={cn('inline-flex h-8 min-w-[70px] items-center justify-center rounded-full px-3 text-[12px] font-black', riskGradeClasses[grade])}>
@@ -630,11 +644,12 @@ export function RiskMapPage() {
       zoneRows: RiskGridResult[]
     }) {
       const mapCoordinateRows = mapRows.filter(hasMapCoordinates)
+      const visibleMapRows = sortRiskRowsByPriority(mapCoordinateRows).slice(0, MAX_MAP_ROWS_FOR_RENDER)
       const zoneSourceRows = zoneRows.length > 0 ? zoneRows : mapRows
       const sortedRiskRows = sortRiskRowsByPriority(zoneSourceRows)
       const apiZones = sortedRiskRows.slice(0, 8).map(toRiskMapHighZone)
 
-      setGridResults(mapCoordinateRows)
+      setGridResults(visibleMapRows)
       setZones(apiZones)
       setStats(statsView ?? (mapRows.length > 0 ? buildRiskMapStats(mapRows, recentReportCount) : null))
       setSelectedGrid(null)
@@ -755,17 +770,19 @@ export function RiskMapPage() {
       )}
 
       <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_316px]">
-        <KakaoRiskMap
-          activeGridCode={selectedGridCode}
-          gridResults={gridResults}
-          isGridDetailLoading={isGridDetailLoading}
-          onClearSelectedGrid={() => {
-            setSelectedGrid(null)
-            setSelectedGridCode(undefined)
-          }}
-          onSelectGrid={handleSelectGrid}
-          selectedGrid={selectedGrid}
-        />
+        <Suspense fallback={<RiskMapLoadingFrame />}>
+          <KakaoRiskMap
+            activeGridCode={selectedGridCode}
+            gridResults={gridResults}
+            isGridDetailLoading={isGridDetailLoading}
+            onClearSelectedGrid={() => {
+              setSelectedGrid(null)
+              setSelectedGridCode(undefined)
+            }}
+            onSelectGrid={handleSelectGrid}
+            selectedGrid={selectedGrid}
+          />
+        </Suspense>
         <RiskSummaryPanel stats={stats} />
       </div>
 
