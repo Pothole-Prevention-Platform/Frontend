@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
   ChevronDown,
@@ -58,6 +58,9 @@ const departmentOptions = ['선택하세요', '서울시 도로관리과', '강�
 const assignmentDistrictOptions = ['자치구를 선택하세요', ...districtOptions.filter((option) => option !== '전체')]
 const priorityLevels: AdminRiskGrade[] = ['긴급', '주의', '관심']
 const LOCAL_RISK_FALLBACK_NOTICE = '현재 로컬 위험도 계산 결과가 없어 예시 데이터를 표시하고 있습니다.'
+const DASHBOARD_REPORT_LIMIT = 50
+const DASHBOARD_REQUEST_TIMEOUT_MS = 1800
+const DASHBOARD_AUTO_REFRESH_MS = 10000
 
 const SEOUL_CENTER = {
   lat: 37.5665,
@@ -178,6 +181,18 @@ const mapRiskStyles: Record<AdminMapRiskLevel, { marker: string; halo: string; l
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error('API request timeout'))
+    }, timeoutMs)
+
+    promise
+      .then(resolve, reject)
+      .finally(() => window.clearTimeout(timer))
+  })
 }
 
 function getNumberField(source: Record<string, unknown>, keys: string[]) {
@@ -1449,37 +1464,52 @@ export function AdminDashboardPage() {
   const [mockMessage, setMockMessage] = useState('')
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
+  const hasLoadedDashboardRef = useRef(false)
+  const previousDistrictRef = useRef(district)
 
   useEffect(() => {
     let ignore = false
 
+    function appendNotice(message: string) {
+      setRiskApiNotice((current) => [current, message].filter(Boolean).join(' '))
+    }
+
+    async function loadDashboardReports() {
+      try {
+        const reportRows = await withTimeout(getCitizenReports(DASHBOARD_REPORT_LIMIT), DASHBOARD_REQUEST_TIMEOUT_MS)
+
+        if (ignore) {
+          return
+        }
+
+        setReports(reportRows)
+        setLastUpdated(new Date())
+      } catch {
+        if (ignore) {
+          return
+        }
+
+        appendNotice('최근 신고 API를 불러오지 못했습니다.')
+      }
+    }
+
     async function loadDashboardRiskData() {
       const districtName = district === '전체' ? undefined : district
-      setIsRiskLoading(true)
+      const shouldShowLoading = !hasLoadedDashboardRef.current || previousDistrictRef.current !== district
+
+      previousDistrictRef.current = district
+
+      if (shouldShowLoading) {
+        setIsRiskLoading(true)
+      }
+
       setRiskApiNotice('')
 
-      const reportsPromise = getCitizenReports(50)
-      void reportsPromise
-        .then((reportRows) => {
-          if (ignore) {
-            return
-          }
+      void loadDashboardReports()
 
-          setReports(reportRows)
-          setLastUpdated(new Date())
-        })
-        .catch(() => {
-          if (ignore) {
-            return
-          }
-
-          setReports([])
-        })
-
-      const [zonesResult, rankingResult, reportsResult] = await Promise.allSettled([
-        getRiskZones(districtName),
-        getDistrictRiskRanking(),
-        reportsPromise,
+      const [zonesResult, rankingResult] = await Promise.allSettled([
+        withTimeout(getRiskZones(districtName), DASHBOARD_REQUEST_TIMEOUT_MS),
+        withTimeout(getDistrictRiskRanking(), DASHBOARD_REQUEST_TIMEOUT_MS),
       ])
 
       if (ignore) {
@@ -1488,12 +1518,10 @@ export function AdminDashboardPage() {
 
       const zoneRows = zonesResult.status === 'fulfilled' ? zonesResult.value : []
       const rankingRows = rankingResult.status === 'fulfilled' ? rankingResult.value : []
-      const reportRows = reportsResult.status === 'fulfilled' ? reportsResult.value : []
       const filteredRankingRows = districtName
         ? rankingRows.filter((row) => getStringField(row, ['districtName', 'district', 'guName']) === districtName)
         : rankingRows
 
-      setReports(reportRows)
       setRiskZones(zoneRows)
       setMapRiskPoints(zoneRows.length > 0 ? toAdminMapRiskPoints(zoneRows) : adminMapRiskPoints)
 
@@ -1505,7 +1533,7 @@ export function AdminDashboardPage() {
         setPriorityAreas(adminPriorityAreas)
       }
 
-      const noticeParts = []
+      const noticeParts: string[] = []
 
       if (zonesResult.status === 'rejected' || rankingResult.status === 'rejected') {
         noticeParts.push('위험도 API 일부를 불러오지 못했습니다.')
@@ -1513,13 +1541,12 @@ export function AdminDashboardPage() {
         noticeParts.push(LOCAL_RISK_FALLBACK_NOTICE)
       }
 
-      if (reportsResult.status === 'rejected') {
-        noticeParts.push('최근 신고 API를 불러오지 못했습니다.')
+      if (noticeParts.length > 0) {
+        setRiskApiNotice((current) => [current, ...noticeParts].filter(Boolean).join(' '))
       }
-
-      setRiskApiNotice(noticeParts.join(' '))
       setLastUpdated(new Date())
       setIsRiskLoading(false)
+      hasLoadedDashboardRef.current = true
     }
 
     void loadDashboardRiskData()
@@ -1528,6 +1555,33 @@ export function AdminDashboardPage() {
       ignore = true
     }
   }, [district, reloadToken])
+
+  useEffect(() => {
+    const requestReload = () => {
+      setReloadToken((value) => value + 1)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestReload()
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        requestReload()
+      }
+    }, DASHBOARD_AUTO_REFRESH_MS)
+
+    window.addEventListener('focus', requestReload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', requestReload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [])
 
   const resetFilters = () => {
     setDistrict(adminFilters.district)
