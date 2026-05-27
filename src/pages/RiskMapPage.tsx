@@ -35,7 +35,9 @@ const defaultFilterValues: Record<RiskMapFilterId, string> = {
 
 const RISK_EMPTY_NOTICE = '표시할 실제 위험도 데이터가 없습니다. 위험도 산출 후 다시 확인해 주세요.'
 const RISK_COORDINATE_NOTICE = '실제 위험도 데이터에 지도 좌표가 없어 목록만 표시합니다.'
+const RISK_SUMMARY_API_NOTICE = '위험도 요약 API 오류로 지도만 먼저 표시하고 대체 데이터를 확인합니다.'
 const MAX_MAP_ROWS_FOR_RENDER = 80
+const FALLBACK_REQUEST_TIMEOUT_MS = 1800
 
 const filterIcons: Record<RiskMapFilterId, ReactNode> = {
   rainfall: <CloudRain size={22} aria-hidden="true" />,
@@ -175,6 +177,18 @@ function getRiskSortValue(result: RiskGridResult) {
 
 function sortRiskRowsByPriority(results: RiskGridResult[]) {
   return [...results].sort((a, b) => getRiskSortValue(b) - getRiskSortValue(a))
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error('API request timeout'))
+    }, timeoutMs)
+
+    promise
+      .then(resolve, reject)
+      .finally(() => window.clearTimeout(timer))
+  })
 }
 
 function getRiskReasons(result: RiskGridResult) {
@@ -659,14 +673,15 @@ export function RiskMapPage() {
         setRiskNotice(RISK_EMPTY_NOTICE)
       } else if (mapCoordinateRows.length === 0) {
         setRiskNotice(RISK_COORDINATE_NOTICE)
+      } else {
+        setRiskNotice('')
       }
     }
 
     async function loadFallbackRiskData() {
-      const [latestResult, zonesResult, reportsResult] = await Promise.allSettled([
-        getLatestGridRiskResults(),
-        getRiskZones(),
-        getCitizenReports(50),
+      const [latestResult, zonesResult] = await Promise.allSettled([
+        withTimeout(getLatestGridRiskResults(), FALLBACK_REQUEST_TIMEOUT_MS),
+        withTimeout(getRiskZones(), FALLBACK_REQUEST_TIMEOUT_MS),
       ])
 
       if (ignore) {
@@ -675,19 +690,29 @@ export function RiskMapPage() {
 
       const latestRows = latestResult.status === 'fulfilled' ? latestResult.value : []
       const zoneRows = zonesResult.status === 'fulfilled' ? zonesResult.value : []
-      const reportRows = reportsResult.status === 'fulfilled' ? reportsResult.value : []
-      const recentReportCount = reportsResult.status === 'fulfilled' ? reportRows.length : undefined
       const mapRows = latestRows.length > 0 ? latestRows : zoneRows
 
       applyRiskRows({
         mapRows,
-        recentReportCount,
         zoneRows,
       })
 
       if (latestResult.status === 'rejected' && zonesResult.status === 'rejected') {
         setRiskNotice('실제 위험도 API 연결에 실패했습니다. 백엔드 상태를 확인해 주세요.')
       }
+
+      void withTimeout(getCitizenReports(50), FALLBACK_REQUEST_TIMEOUT_MS)
+        .then((reportRows) => {
+          if (ignore) {
+            return
+          }
+
+          setStats((currentStats) => ({
+            ...(currentStats ?? buildRiskMapStats(mapRows)),
+            recentReportCount: reportRows.length,
+          }))
+        })
+        .catch(() => undefined)
     }
 
     async function loadRiskData() {
@@ -710,7 +735,13 @@ export function RiskMapPage() {
           zoneRows,
         })
       } catch {
-        await loadFallbackRiskData()
+        if (!ignore) {
+          setRiskNotice(RISK_SUMMARY_API_NOTICE)
+          setIsRiskLoading(false)
+        }
+
+        void loadFallbackRiskData()
+        return
       }
 
       if (!ignore) {
