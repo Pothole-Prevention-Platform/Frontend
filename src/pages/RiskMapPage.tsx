@@ -427,7 +427,7 @@ function RiskLegendCard() {
         ))}
       </div>
       <p className="mt-2 text-[11px] font-semibold leading-relaxed tracking-[-0.04em] text-slate-500">
-        지도 원형 마커 기준 위험도 색상입니다.
+        원형 마커와 500m 격자 오버레이는 같은 위험 등급 색상입니다.
       </p>
     </section>
   )

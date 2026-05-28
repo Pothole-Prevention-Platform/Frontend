@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
+import { CustomOverlayMap, Map, Rectangle, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { X } from 'lucide-react'
 import { interactiveKakaoMapOptions } from '../../constants/kakaoMapOptions'
 import type { RiskGridResult } from '../../types/risk'
@@ -17,6 +17,10 @@ type KakaoRiskMapProps = {
 type RiskMarkerTone = 'red' | 'orange' | 'yellow' | 'green' | 'gray'
 
 type RiskMarker = {
+  bounds: {
+    ne: LatLng
+    sw: LatLng
+  }
   gridCode?: string
   id: string
   label: string
@@ -30,6 +34,11 @@ type RiskMarker = {
   }
 }
 
+type LatLng = {
+  lat: number
+  lng: number
+}
+
 const INITIAL_MAP_CENTER = {
   lat: 37.5509,
   lng: 126.8495,
@@ -37,6 +46,8 @@ const INITIAL_MAP_CENTER = {
 
 const MAX_VISIBLE_MARKERS = 40
 const FALLBACK_VISIBLE_MARKERS = 20
+const GRID_HALF_SIZE_METERS = 250
+const METERS_PER_LATITUDE_DEGREE = 111_320
 const MIN_PRIORITY_RISK_SCORE = 20
 
 const riskToneClasses: Record<RiskMarkerTone, string> = {
@@ -45,6 +56,14 @@ const riskToneClasses: Record<RiskMarkerTone, string> = {
   yellow: 'bg-yellow-500 text-slate-950 shadow-yellow-500/35',
   green: 'bg-green-500 text-white shadow-green-500/35',
   gray: 'bg-slate-500 text-white shadow-slate-500/30',
+}
+
+const riskAreaStyles: Record<RiskMarkerTone, { fillColor: string; strokeColor: string }> = {
+  red: { fillColor: '#EF4444', strokeColor: '#DC2626' },
+  orange: { fillColor: '#F97316', strokeColor: '#EA580C' },
+  yellow: { fillColor: '#EAB308', strokeColor: '#CA8A04' },
+  green: { fillColor: '#22C55E', strokeColor: '#16A34A' },
+  gray: { fillColor: '#64748B', strokeColor: '#475569' },
 }
 
 const riskLabelByTone: Record<RiskMarkerTone, string> = {
@@ -92,6 +111,23 @@ function getGridCenter(result: RiskGridResult) {
   const centerLng = getNumberField(result, ['centerLng', 'longitude', 'lng'])
 
   return centerLat !== undefined && centerLng !== undefined ? { lat: centerLat, lng: centerLng } : undefined
+}
+
+function getGridBounds(center: LatLng) {
+  const latDelta = GRID_HALF_SIZE_METERS / METERS_PER_LATITUDE_DEGREE
+  const lngMetersPerDegree = METERS_PER_LATITUDE_DEGREE * Math.cos((center.lat * Math.PI) / 180)
+  const lngDelta = GRID_HALF_SIZE_METERS / Math.max(lngMetersPerDegree, 1)
+
+  return {
+    ne: {
+      lat: center.lat + latDelta,
+      lng: center.lng + lngDelta,
+    },
+    sw: {
+      lat: center.lat - latDelta,
+      lng: center.lng - lngDelta,
+    },
+  }
 }
 
 function getRiskToneFromValues(rawLevel: string | undefined, riskScore: number | undefined): RiskMarkerTone {
@@ -156,6 +192,7 @@ function buildMarkers(results: RiskGridResult[]) {
 
       return {
         gridCode,
+        bounds: getGridBounds(center),
         id: gridCode ?? `risk-marker-${index}`,
         label: districtName ?? gridCode ?? `위험 격자 ${index + 1}`,
         position: center,
@@ -221,6 +258,7 @@ function RiskDetailPanel({
 }) {
   const fields = [
     { label: '격자 코드', value: getStringField(result, ['gridCode', 'gridId']) },
+    { label: '분석 범위', value: '500m 격자' },
     { label: '자치구', value: getStringField(result, ['districtName', 'district', 'guName']) },
     { label: '위험 등급', value: getDisplayRiskLevel(result) },
     { label: '위험도', value: getNumberField(result, ['riskScore']) },
@@ -327,6 +365,25 @@ export function KakaoRiskMap({
       >
         {shouldRenderMarkers && markers.map((marker) => {
           const isSelected = marker.gridCode !== undefined && marker.gridCode === activeGridCode
+          const areaStyle = riskAreaStyles[marker.tone]
+
+          return (
+            <Rectangle
+              key={`${marker.id}-grid`}
+              bounds={marker.bounds}
+              fillColor={areaStyle.fillColor}
+              fillOpacity={isSelected ? 0.22 : 0.12}
+              onClick={() => onSelectGrid(marker.result)}
+              strokeColor={areaStyle.strokeColor}
+              strokeOpacity={isSelected ? 0.75 : 0.42}
+              strokeWeight={isSelected ? 3 : 2}
+              zIndex={isSelected ? 8 : 5}
+            />
+          )
+        })}
+
+        {shouldRenderMarkers && markers.map((marker) => {
+          const isSelected = marker.gridCode !== undefined && marker.gridCode === activeGridCode
           const markerValue = marker.riskScore === undefined ? marker.riskLevelLabel : Math.round(marker.riskScore)
 
           return (
@@ -386,6 +443,9 @@ export function KakaoRiskMap({
             <span className="mt-0.5 block text-[9px] font-bold text-slate-500">{item.range}</span>
           </div>
         ))}
+        <p className="col-span-5 mt-1 text-center text-[10px] font-bold text-slate-500">
+          원형 마커와 반투명 500m 격자는 같은 위험 등급 색상입니다.
+        </p>
       </div>
 
       {selectedGrid && (
