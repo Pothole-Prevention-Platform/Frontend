@@ -1,12 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CustomOverlayMap, Map, Rectangle, useKakaoLoader } from 'react-kakao-maps-sdk'
-import { X } from 'lucide-react'
+import { LocateFixed, X } from 'lucide-react'
 import { interactiveKakaoMapOptions } from '../../constants/kakaoMapOptions'
 import type { RiskGridResult } from '../../types/risk'
 import { cn } from '../../utils/cn'
 
 type KakaoRiskMapProps = {
   activeGridCode?: string
+  focusLocation?: {
+    lat: number
+    lng: number
+    requestId: number
+  } | null
   gridResults: RiskGridResult[]
   isGridDetailLoading: boolean
   onClearSelectedGrid: () => void
@@ -73,14 +78,6 @@ const riskLabelByTone: Record<RiskMarkerTone, string> = {
   green: '안전',
   gray: '미확인',
 }
-
-const riskLegendItems: { label: string; range: string; tone: RiskMarkerTone }[] = [
-  { label: '안전', range: '0~20%', tone: 'green' },
-  { label: '관심', range: '20~40%', tone: 'yellow' },
-  { label: '주의', range: '40~70%', tone: 'orange' },
-  { label: '위험', range: '70% 이상', tone: 'red' },
-  { label: '미확인', range: '데이터 없음', tone: 'gray' },
-]
 
 function getNumberField(result: RiskGridResult, keys: string[]) {
   for (const key of keys) {
@@ -308,6 +305,7 @@ function RiskDetailPanel({
 
 export function KakaoRiskMap({
   activeGridCode,
+  focusLocation,
   gridResults,
   isGridDetailLoading,
   onClearSelectedGrid,
@@ -321,6 +319,7 @@ export function KakaoRiskMap({
   const markers = useMemo(() => buildMarkers(gridResults), [gridResults])
   const [isMapCreated, setIsMapCreated] = useState(false)
   const [shouldRenderMarkers, setShouldRenderMarkers] = useState(false)
+  const mapRef = useRef<kakao.maps.Map | null>(null)
 
   useEffect(() => {
     if (!isMapCreated || isLoading) {
@@ -335,6 +334,16 @@ export function KakaoRiskMap({
 
     return () => window.clearTimeout(markerRenderTimer)
   }, [isLoading, isMapCreated, markers])
+
+  useEffect(() => {
+    if (!focusLocation || !isMapCreated || !mapRef.current || typeof kakao === 'undefined') {
+      return
+    }
+
+    mapRef.current.relayout()
+    mapRef.current.setLevel(4)
+    mapRef.current.panTo(new kakao.maps.LatLng(focusLocation.lat, focusLocation.lng))
+  }, [focusLocation, isMapCreated])
 
   if (!kakaoJavaScriptKey) {
     return (
@@ -359,7 +368,10 @@ export function KakaoRiskMap({
         className="kakao-map-root h-full w-full"
         isPanto
         level={7}
-        onCreate={() => setIsMapCreated(true)}
+        onCreate={(map) => {
+          mapRef.current = map
+          setIsMapCreated(true)
+        }}
         style={{ height: '100%', width: '100%' }}
         {...interactiveKakaoMapOptions}
       >
@@ -413,6 +425,25 @@ export function KakaoRiskMap({
             </CustomOverlayMap>
           )
         })}
+
+        {focusLocation && (
+          <CustomOverlayMap
+            clickable
+            position={{ lat: focusLocation.lat, lng: focusLocation.lng }}
+            yAnchor={1}
+            zIndex={40}
+          >
+            <div className="flex -translate-y-1 flex-col items-center">
+              <span className="relative flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-white bg-blue-600 text-white shadow-xl shadow-blue-500/35">
+                <span className="absolute inset-[-8px] rounded-full bg-blue-500/20" aria-hidden="true" />
+                <LocateFixed size={21} strokeWidth={2.6} aria-hidden="true" className="relative z-10" />
+              </span>
+              <span className="mt-1 max-w-[86px] truncate rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
+                현재 위치
+              </span>
+            </div>
+          </CustomOverlayMap>
+        )}
       </Map>
 
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/5 via-transparent to-slate-900/5" />
@@ -434,19 +465,6 @@ export function KakaoRiskMap({
           표시할 위험 격자가 없습니다.
         </div>
       )}
-
-      <div className="absolute bottom-5 right-4 z-20 grid min-w-[250px] grid-cols-5 gap-2 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur sm:right-6">
-        {riskLegendItems.map((item) => (
-          <div key={item.tone} className="text-center">
-            <span className={cn('mx-auto block h-3 w-3 rounded-full', riskToneClasses[item.tone].split(' ')[0])} />
-            <span className="mt-1 block text-[10px] font-black text-slate-700">{item.label}</span>
-            <span className="mt-0.5 block text-[9px] font-bold text-slate-500">{item.range}</span>
-          </div>
-        ))}
-        <p className="col-span-5 mt-1 text-center text-[10px] font-bold text-slate-500">
-          원형 마커와 반투명 500m 격자는 같은 위험 등급 색상입니다.
-        </p>
-      </div>
 
       {selectedGrid && (
         <RiskDetailPanel

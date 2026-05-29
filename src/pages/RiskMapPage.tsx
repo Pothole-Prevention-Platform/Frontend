@@ -1,21 +1,16 @@
 import { lazy, Suspense, type ReactNode, useEffect, useState } from 'react'
 import {
-  Building2,
-  ChevronDown,
   ChevronRight,
   CircleHelp,
-  CloudRain,
-  Construction,
   Cpu,
-  Droplets,
-  RefreshCcw,
+  LocateFixed,
   Siren,
   UserRound,
 } from 'lucide-react'
 import { getCitizenReports } from '../api/reportApi'
 import { getGridRiskResult, getLatestGridRiskResults, getRiskMapSummary, getRiskZones } from '../api/riskApi'
-import { riskLegend, riskMapFilters } from '../data/mockData'
-import type { RiskGridResult, RiskMapFilterId, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem, RiskMapStats, RiskMapSummaryResponse } from '../types'
+import { riskLegend } from '../data/mockData'
+import type { RiskGridResult, RiskMapHighZone, RiskMapHighZoneGrade, RiskMapLegendItem, RiskMapStats, RiskMapSummaryResponse } from '../types'
 import { cn } from '../utils/cn'
 
 const KakaoRiskMap = lazy(() =>
@@ -26,11 +21,10 @@ const KakaoRiskMap = lazy(() =>
 
 type StatColor = 'red' | 'blue' | 'teal'
 
-const defaultFilterValues: Record<RiskMapFilterId, string> = {
-  rainfall: '최근 7일 (누적)',
-  roadYear: '전체',
-  sewerAging: '전체',
-  undergroundConstruction: '전체',
+type CurrentMapLocation = {
+  lat: number
+  lng: number
+  requestId: number
 }
 
 const RISK_EMPTY_NOTICE = '표시할 실제 위험도 데이터가 없습니다. 위험도 산출 후 다시 확인해 주세요.'
@@ -38,13 +32,6 @@ const RISK_COORDINATE_NOTICE = '실제 위험도 데이터에 지도 좌표가 �
 const RISK_SUMMARY_API_NOTICE = '위험도 요약 API 오류로 지도만 먼저 표시하고 대체 데이터를 확인합니다.'
 const MAX_MAP_ROWS_FOR_RENDER = 80
 const FALLBACK_REQUEST_TIMEOUT_MS = 1800
-
-const filterIcons: Record<RiskMapFilterId, ReactNode> = {
-  rainfall: <CloudRain size={22} aria-hidden="true" />,
-  roadYear: <Building2 size={22} aria-hidden="true" />,
-  sewerAging: <Droplets size={22} className="text-green-600" aria-hidden="true" />,
-  undergroundConstruction: <Construction size={22} className="text-teal-600" aria-hidden="true" />,
-}
 
 const riskGradeClasses: Record<RiskMapHighZoneGrade, string> = {
   긴급: 'bg-red-600 text-white',
@@ -288,43 +275,42 @@ function buildRiskMapStatsFromSummary(summary: RiskMapSummaryResponse, fallbackR
   }
 }
 
-function FilterBar() {
-  const [filterValues, setFilterValues] = useState<Record<RiskMapFilterId, string>>(defaultFilterValues)
-
-  const resetFilters = () => {
-    setFilterValues(defaultFilterValues)
+function getCurrentLocationErrorMessage(error: GeolocationPositionError) {
+  if (error.code === error.PERMISSION_DENIED) {
+    return '현재 위치 권한이 거부되었습니다. 브라우저 위치 권한을 허용한 뒤 다시 시도해 주세요.'
   }
 
-  return (
-    <div className="mt-5 grid grid-cols-2 gap-3 sm:mt-6 sm:flex sm:flex-wrap">
-      {riskMapFilters.map((filter) => (
-        <button
-          key={filter.id}
-          type="button"
-          className="flex h-[60px] min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 sm:h-[64px] sm:min-w-[180px] sm:flex-none sm:px-5"
-          aria-label={`${filter.title} 필터, 현재 값 ${filterValues[filter.id]}`}
-        >
-          <span className="flex min-w-0 items-center gap-3 sm:gap-4">
-            <span className="shrink-0 text-blue-700">{filterIcons[filter.id]}</span>
-            <span className="min-w-0">
-              <span className="block truncate text-[12px] font-black tracking-[-0.02em] text-[#07182F] min-[380px]:text-[13px] sm:text-[14px] sm:tracking-[-0.04em]">{filter.title}</span>
-              <span className="mt-1 block truncate text-[12px] font-semibold tracking-[-0.04em] text-slate-500">
-                {filterValues[filter.id]}
-              </span>
-            </span>
-          </span>
-          <ChevronDown size={17} className="shrink-0 text-slate-600" aria-hidden="true" />
-        </button>
-      ))}
+  if (error.code === error.POSITION_UNAVAILABLE) {
+    return '현재 위치를 확인할 수 없습니다. 기기의 위치 서비스를 확인해 주세요.'
+  }
 
+  if (error.code === error.TIMEOUT) {
+    return '현재 위치 확인 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'
+  }
+
+  return '현재 위치를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
+}
+
+function FilterBar({
+  isLocatingCurrentLocation,
+  onMoveToCurrentLocation,
+}: {
+  isLocatingCurrentLocation: boolean
+  onMoveToCurrentLocation: () => void
+}) {
+  return (
+    <div className="mt-5 flex flex-col gap-3 sm:mt-6 lg:flex-row lg:items-stretch">
       <button
         type="button"
-        onClick={resetFilters}
-        className="col-span-2 flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-black tracking-[-0.02em] text-slate-700 shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 sm:h-[64px] sm:min-w-[132px] sm:flex-none sm:text-[14px] sm:tracking-[-0.04em]"
+        aria-label="현재 위치로 지도 이동"
+        disabled={isLocatingCurrentLocation}
+        onClick={onMoveToCurrentLocation}
+        className="flex h-12 min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-black tracking-[-0.02em] text-slate-700 shadow-[0_10px_26px_rgba(15,40,70,0.05)] transition hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-blue-400 disabled:cursor-wait disabled:text-slate-400 sm:h-[64px] sm:min-w-[154px] sm:flex-none sm:px-5 sm:text-[14px] sm:tracking-[-0.04em]"
       >
-        <RefreshCcw size={20} className="text-slate-600 sm:size-[22px]" aria-hidden="true" />
-        <span className="whitespace-nowrap">필터 초기화</span>
+        <LocateFixed size={20} className={cn('text-blue-700 sm:size-[22px]', isLocatingCurrentLocation && 'animate-pulse text-slate-400')} aria-hidden="true" />
+        <span className="whitespace-nowrap">{isLocatingCurrentLocation ? '위치 확인 중' : '현재 위치로 이동'}</span>
       </button>
+      <RiskLegendCard />
     </div>
   )
 }
@@ -415,20 +401,19 @@ function StatSummaryCard({
 
 function RiskLegendCard() {
   return (
-    <section className="min-h-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_rgba(15,40,70,0.06)]">
-      <h2 className="text-[17px] font-black tracking-[-0.05em] text-[#07182F]">위험 등급 범례</h2>
-      <div className="mt-3 grid grid-cols-4 gap-2">
-        {riskLegend.map((item) => (
-          <div key={item.id} className="text-center">
-            <span className={cn('mx-auto block h-3 w-3 rounded-full', legendDotClasses[item.color])} />
-            <p className="mt-1 text-[11px] font-black text-slate-700">{item.label}</p>
-            <p className="mt-0.5 text-[10px] font-semibold text-slate-500">({item.range})</p>
-          </div>
-        ))}
+    <section className="flex min-w-0 items-center rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_10px_26px_rgba(15,40,70,0.05)] sm:min-h-[64px] lg:ml-auto lg:flex-1 xl:max-w-[640px]">
+      <div className="flex w-full flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="shrink-0 text-[15px] font-black tracking-[-0.04em] text-[#07182F]">위험 등급 범례</h2>
+        <div className="grid grid-cols-4 gap-3 md:min-w-[360px]">
+          {riskLegend.map((item) => (
+            <div key={item.id} className="text-center">
+              <span className={cn('mx-auto block h-3 w-3 rounded-full', legendDotClasses[item.color])} />
+              <p className="mt-1 text-[11px] font-black text-slate-700">{item.label}</p>
+              <p className="mt-0.5 text-[10px] font-semibold text-slate-500">({item.range})</p>
+            </div>
+          ))}
+        </div>
       </div>
-      <p className="mt-2 text-[11px] font-semibold leading-relaxed tracking-[-0.04em] text-slate-500">
-        원형 마커와 500m 격자 오버레이는 같은 위험 등급 색상입니다.
-      </p>
     </section>
   )
 }
@@ -443,7 +428,7 @@ function formatStatValue(value: number | undefined, fractionDigits = 0) {
 
 function RiskSummaryPanel({ stats }: { stats: RiskMapStatsView | null }) {
   return (
-    <aside className="grid gap-3 sm:grid-cols-2 xl:h-[560px] xl:grid-cols-1 xl:grid-rows-[132px_132px_132px_minmax(0,1fr)]">
+    <aside className="grid gap-3 sm:grid-cols-2 xl:h-[560px] xl:grid-cols-1 xl:grid-rows-3">
       <StatSummaryCard
         title="오늘의 고위험 구간"
         value={formatStatValue(stats?.highRiskCount)}
@@ -470,7 +455,6 @@ function RiskSummaryPanel({ stats }: { stats: RiskMapStatsView | null }) {
         color="teal"
         icon={<Cpu size={44} aria-hidden="true" />}
       />
-      <RiskLegendCard />
     </aside>
   )
 }
@@ -642,6 +626,9 @@ export function RiskMapPage() {
   const [isGridDetailLoading, setIsGridDetailLoading] = useState(false)
   const [isRiskLoading, setIsRiskLoading] = useState(true)
   const [riskNotice, setRiskNotice] = useState('')
+  const [currentMapLocation, setCurrentMapLocation] = useState<CurrentMapLocation | null>(null)
+  const [isLocatingCurrentLocation, setIsLocatingCurrentLocation] = useState(false)
+  const [locationNotice, setLocationNotice] = useState('')
 
   useEffect(() => {
     let ignore = false
@@ -783,6 +770,37 @@ export function RiskMapPage() {
     }
   }
 
+  const handleMoveToCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationNotice('현재 브라우저에서 위치 정보를 사용할 수 없습니다.')
+      return
+    }
+
+    setIsLocatingCurrentLocation(true)
+    setLocationNotice('현재 위치를 확인하는 중입니다.')
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCurrentMapLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          requestId: Date.now(),
+        })
+        setLocationNotice('현재 위치로 지도를 이동했습니다.')
+        setIsLocatingCurrentLocation(false)
+      },
+      (error) => {
+        setLocationNotice(getCurrentLocationErrorMessage(error))
+        setIsLocatingCurrentLocation(false)
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 30_000,
+        timeout: 10_000,
+      },
+    )
+  }
+
   return (
     <div className="min-w-0">
       <div>
@@ -792,7 +810,10 @@ export function RiskMapPage() {
         </p>
       </div>
 
-      <FilterBar />
+      <FilterBar
+        isLocatingCurrentLocation={isLocatingCurrentLocation}
+        onMoveToCurrentLocation={handleMoveToCurrentLocation}
+      />
 
       {(isRiskLoading || riskNotice) && (
         <p role="status" className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-[13px] font-bold leading-5 text-blue-700">
@@ -800,10 +821,17 @@ export function RiskMapPage() {
         </p>
       )}
 
+      {locationNotice && (
+        <p role="status" className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[13px] font-bold leading-5 text-slate-600">
+          {locationNotice}
+        </p>
+      )}
+
       <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_316px]">
         <Suspense fallback={<RiskMapLoadingFrame />}>
           <KakaoRiskMap
             activeGridCode={selectedGridCode}
+            focusLocation={currentMapLocation}
             gridResults={gridResults}
             isGridDetailLoading={isGridDetailLoading}
             onClearSelectedGrid={() => {

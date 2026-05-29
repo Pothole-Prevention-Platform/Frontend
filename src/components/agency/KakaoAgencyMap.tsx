@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Landmark, LocateFixed, MapPin, Minus, Plus } from 'lucide-react'
+import { Landmark, LocateFixed, Minus, Plus } from 'lucide-react'
 import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { interactiveKakaoMapOptions } from '../../constants/kakaoMapOptions'
 
@@ -113,13 +113,15 @@ export function KakaoAgencyMap({
         }}
         {...interactiveKakaoMapOptions}
       >
-        <CustomOverlayMap position={position} yAnchor={1}>
+        <CustomOverlayMap position={position} yAnchor={0.66}>
           <div className="flex flex-col items-center">
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_14px_28px_rgba(0,95,220,0.35)]">
-              <span className="absolute inset-[-9px] rounded-full bg-blue-500/20" />
-              <MapPin size={30} fill="currentColor" strokeWidth={2.6} aria-hidden="true" className="relative z-10" />
+            <div className="relative h-[38px] w-[34px] drop-shadow-[0_5px_8px_rgba(0,64,160,0.32)]" aria-hidden="true">
+              <span className="absolute left-1/2 top-0 h-8 w-8 -translate-x-1/2 rounded-full bg-[#2586ff] ring-2 ring-white" />
+              <span className="absolute left-1/2 top-[25px] h-2.5 w-2.5 -translate-x-1/2 rotate-45 rounded-[2px] bg-[#2586ff]" />
+              <span className="absolute left-1/2 top-[8px] h-4 w-4 -translate-x-1/2 rounded-full bg-white" />
+              <span className="absolute left-1/2 top-[12px] h-[6px] w-[9px] -translate-x-1/2 rounded-b-full bg-[#2586ff]" />
             </div>
-            <span className="mt-1 rounded-full bg-white px-3 py-1 text-[11px] font-black text-blue-700 shadow-sm">사고 위치</span>
+            <span className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-blue-700 shadow-sm">사고 위치</span>
           </div>
         </CustomOverlayMap>
       </Map>

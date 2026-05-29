@@ -12,7 +12,6 @@ import {
   MapPin,
   Minus,
   Plus,
-  RefreshCcw,
   X,
 } from 'lucide-react'
 import { CustomOverlayMap, Map, useKakaoLoader } from 'react-kakao-maps-sdk'
@@ -178,6 +177,17 @@ function BlankPhotoSpace({ compact = false }: { compact?: boolean }) {
   )
 }
 
+function BlueLocationMarker() {
+  return (
+    <div className="relative h-[38px] w-[34px] drop-shadow-[0_5px_8px_rgba(0,64,160,0.32)]" aria-hidden="true">
+      <span className="absolute left-1/2 top-0 h-8 w-8 -translate-x-1/2 rounded-full bg-[#2586ff] ring-2 ring-white" />
+      <span className="absolute left-1/2 top-[25px] h-2.5 w-2.5 -translate-x-1/2 rotate-45 rounded-[2px] bg-[#2586ff]" />
+      <span className="absolute left-1/2 top-[8px] h-4 w-4 -translate-x-1/2 rounded-full bg-white" />
+      <span className="absolute left-1/2 top-[12px] h-[6px] w-[9px] -translate-x-1/2 rounded-b-full bg-[#2586ff]" />
+    </div>
+  )
+}
+
 function FallbackLocationMap({ location }: { location: ReportLocationOption }) {
   return (
     <div
@@ -193,8 +203,8 @@ function FallbackLocationMap({ location }: { location: ReportLocationOption }) {
         className="absolute flex -translate-x-1/2 -translate-y-full flex-col items-center"
         style={{ left: `${location.previewPosition.left}%`, top: `${location.previewPosition.top}%` }}
       >
-        <MapPin className="text-blue-700 drop-shadow-md" size={46} fill="#0B6DDE" aria-hidden="true" />
-        <span className="mt-[-4px] max-w-[120px] truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
+        <BlueLocationMarker />
+        <span className="max-w-[120px] truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
           {location.district}
         </span>
       </div>
@@ -335,13 +345,10 @@ function MapPreview({ location }: { location: ReportLocationOption }) {
           style={{ height: '100%', width: '100%' }}
           {...interactiveKakaoMapOptions}
         >
-          <CustomOverlayMap position={position} yAnchor={1}>
-            <div className="flex -translate-y-1 flex-col items-center">
-              <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-white shadow-[0_12px_26px_rgba(0,95,220,0.32)]">
-                <span className="absolute inset-[-7px] rounded-full bg-blue-500/20" />
-                <MapPin size={25} fill="currentColor" strokeWidth={2.6} aria-hidden="true" className="relative z-10" />
-              </div>
-              <span className="mt-1 max-w-[118px] truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
+          <CustomOverlayMap position={position} yAnchor={0.7}>
+            <div className="flex flex-col items-center">
+              <BlueLocationMarker />
+              <span className="max-w-[118px] truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700 shadow-sm">
                 {location.district}
               </span>
             </div>
@@ -424,11 +431,12 @@ function LocationSection({
 
           <button
             type="button"
+            aria-label="현재위치로 이동"
             onClick={() => onLocationChange(defaultReportLocationId)}
             className="flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12px] font-black text-slate-600 shadow-sm transition hover:bg-slate-50"
           >
-            <RefreshCcw size={14} aria-hidden="true" />
-            위치 재설정
+            <LocateFixed size={14} aria-hidden="true" />
+            현재위치로
           </button>
         </div>
 
