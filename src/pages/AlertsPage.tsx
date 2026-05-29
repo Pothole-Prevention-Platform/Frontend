@@ -1034,22 +1034,13 @@ export function AlertsPage() {
 
   return (
     <div className="min-w-0">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
         <div>
           <h1 className="text-[30px] font-black leading-tight text-[#07182F] sm:text-[33px]">실시간 위험 알림</h1>
           <p className="mt-1 text-[15px] font-semibold leading-6 text-slate-500">
             실시간 위험 정보를 빠르게 확인하고 안전한 경로로 이동하세요.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadAlerts()}
-          disabled={isAlertLoading}
-          className="flex h-11 w-fit items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-black text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RefreshCcw size={17} aria-hidden="true" />
-          {isAlertLoading ? '갱신 중' : '알림 새로고침'}
-        </button>
       </div>
 
       <MockNotice message={noticeMessage} />
